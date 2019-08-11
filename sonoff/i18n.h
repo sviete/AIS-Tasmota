@@ -118,10 +118,12 @@
 #define D_JSON_PROGRAMSIZE "ProgramSize"
 #define D_JSON_REFERENCETEMPERATURE "ReferenceTemperature"
 #define D_JSON_RESET "Reset"
+#define D_JSON_RESISTANCE "Resistance"
 #define D_JSON_RESOLUTION "Resolution"
 #define D_JSON_RESTARTING "Restarting"
 #define D_JSON_RESTARTREASON "RestartReason"
 #define D_JSON_RSSI "RSSI"
+#define D_JSON_RUNTIME "Runtime"
 #define D_JSON_SAVEADDRESS "SaveAddress"
 #define D_JSON_SAVECOUNT "SaveCount"
 #define D_JSON_SAVED "Saved"
@@ -133,6 +135,7 @@
 #define D_JSON_STARTDST "StartDST"       // Start Daylight Savings Time
 #define D_JSON_STARTED "Started"
 #define D_JSON_STARTUPUTC "StartupUTC"
+#define D_JSON_STATUS "Status"
 #define D_JSON_SUBNETMASK "Subnetmask"
 #define D_JSON_SUCCESSFUL "Successful"
 #define D_JSON_SUNRISE "Sunrise"
@@ -164,6 +167,13 @@
 #define D_JSON_WRONG_PARAMETERS "Wrong parameters"
 #define D_JSON_YESTERDAY "Yesterday"
 #define D_JSON_ZERO_POINT_CALIBRATION "Zero Point Calibration"
+#define D_JSON_PV1_VOLTAGE "Pv1Voltage"
+#define D_JSON_PV1_CURRENT "Pv1Current"
+#define D_JSON_PV1_POWER "Pv1Power"
+#define D_JSON_PV2_VOLTAGE "Pv2Voltage"
+#define D_JSON_PV2_CURRENT "Pv2Current"
+#define D_JSON_PV2_POWER "Pv2Power"
+#define D_JSON_SOLAR_POWER "SolarPower"
 
 #define D_RSLT_ENERGY "ENERGY"
 #define D_RSLT_HASS_STATE "HASS_STATE"
@@ -289,6 +299,7 @@
 #define D_CMND_MQTTCLIENT "MqttClient"
 #define D_CMND_MQTTUSER "MqttUser"
 #define D_CMND_MQTTPASSWORD "MqttPassword"
+#define D_CMND_TLSKEY "TLSKey"
 #define D_CMND_FULLTOPIC "FullTopic"
 #define D_CMND_PREFIX "Prefix"
   #define PRFX_MAX_STRING_LENGTH 5
@@ -428,6 +439,9 @@
 #define D_CMND_LATITUDE "Latitude"
 #define D_CMND_LONGITUDE "Longitude"
 
+// Commands xdrv_23_zigbee.ino
+#define D_CMND_ZIGBEEZNPSEND "ZigbeeZNPSend"
+  #define D_JSON_ZIGBEEZNPRECEIVED "ZigbeeZNPReceived"
 /********************************************************************************************/
 
 #define D_ASTERISK_PWD "****"
