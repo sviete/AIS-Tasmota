@@ -198,7 +198,7 @@
 #define D_OSWATCH "osWatch"
 #define D_BLOCKED_LOOP "Pętla zablokowana"
 #define D_WPS_FAILED_WITH_STATUS "Błąd WPSconfig ze statusem"
-#define D_ACTIVE_FOR_3_MINUTES "aktywny 3 minuty"
+#define D_ACTIVE_FOR_3_MINUTES "aktywny 4 minuty"
 #define D_FAILED_TO_START "nie udało się uruchomić"
 #define D_PATCH_ISSUE_2186 "Błąd łatki 2186"
 #define D_CONNECTING_TO_AP "Łączenie z AP"

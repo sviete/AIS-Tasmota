@@ -50,7 +50,7 @@
 #define PROJECT                "ais-dom"          // PROJECT is used as the default topic delimiter
 
 // If not selected the default will be SONOFF_BASIC
-//#define MODULE                 SONOFF_S2X     // [Module] Select default model from sonoff_template.h
+#define MODULE                 SONOFF_S2X     // [Module] Select default model from sonoff_template.h
 
 #define SAVE_DATA              1                 // [SaveData] Save changed parameters to Flash (0 = disable, 1 - 3600 seconds)
 #define SAVE_STATE             1                 // [SetOption0] Save changed power state to Flash (0 = disable, 1 = enable)
@@ -136,9 +136,9 @@
 #define FRIENDLY_NAME          "Nowe gniazdko"          // [FriendlyName] Friendlyname up to 32 characters used by webpages and Alexa
 #define EMULATION              EMUL_NONE         // [Emulation] Select Belkin WeMo (single relay/light) or Hue Bridge emulation (multi relay/light) (EMUL_NONE, EMUL_WEMO or EMUL_HUE)
 // HTML hex color codes. Only 3 and 6 digit hex string values are supported!! See https://www.w3schools.com/colors/colors_hex.asp
-#define COLOR_TEXT                  "#000"       // [WebColor1] Global text color - Black
-#define COLOR_BACKGROUND            "#fff"       // [WebColor2] Global background color - White
-#define COLOR_FORM                  "#f2f2f2"    // [WebColor3] Form background color - Greyish
+#define COLOR_TEXT                  "#ffffff"       // [WebColor1] Global text color - Black
+#define COLOR_BACKGROUND            "#2f2f2f"       // [WebColor2] Global background color - White
+#define COLOR_FORM                  "#2f2f2f"    // [WebColor3] Form background color - Greyish
 #define COLOR_INPUT_TEXT            "#000"       // [WebColor4] Input text color - Black
 #define COLOR_INPUT                 "#fff"       // [WebColor5] Input background color - White
 #define COLOR_CONSOLE_TEXT          "#000"       // [WebColor6] Console text color - Black
@@ -146,12 +146,12 @@
 #define COLOR_TEXT_WARNING          "#f00"       // [WebColor8] Warning text color - Red
 #define COLOR_TEXT_SUCCESS          "#008000"    // [WebColor9] Success text color - Green
 #define COLOR_BUTTON_TEXT           "#fff"       // [WebColor10] Button text color - White
-#define COLOR_BUTTON                "#1fa3ec"    // [WebColor11] Button color - Blueish
-#define COLOR_BUTTON_HOVER          "#0e70a4"    // [WebColor12] Button color when hovered over - Darker blueish
+#define COLOR_BUTTON                "#b9babb"    // [WebColor11] Button color - Blueish
+#define COLOR_BUTTON_HOVER          "#767879"    // [WebColor12] Button color when hovered over - Darker blueish
 #define COLOR_BUTTON_RESET          "#d43535"    // [WebColor13] Restart/Reset/Delete button color - Redish
 #define COLOR_BUTTON_RESET_HOVER    "#931f1f"    // [WebColor14] Restart/Reset/Delete button color when hovered over - Darker redish
 #define COLOR_BUTTON_SAVE           "#47c266"    // [WebColor15] Save button color - Greenish
-#define COLOR_BUTTON_SAVE_HOVER     "#5aaf6f"    // [WebColor16] Save button color when hovered over - Darker greenish
+#define COLOR_BUTTON_SAVE_HOVER     "#007b20"    // [WebColor16] Save button color when hovered over - Darker greenish
 #define COLOR_TIMER_TAB_TEXT        "#fff"       // [WebColor17] Config timer tab text color - White
 #define COLOR_TIMER_TAB_BACKGROUND  "#999"       // [WebColor18] Config timer tab background color - Light grey
 
