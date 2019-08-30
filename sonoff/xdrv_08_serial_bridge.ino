@@ -26,11 +26,13 @@
 
 const uint8_t SERIAL_BRIDGE_BUFFER_SIZE = 130;
 
+const char kSerialBridgeCommands[] PROGMEM = "|"  // No prefix
+  D_CMND_SSERIALSEND "|" D_CMND_SBAUDRATE;
+
+void (* const SerialBridgeCommand[])(void) PROGMEM =
+  { &CmndSSerialSend, &CmndSBaudrate };
+
 #include <TasmotaSerial.h>
-
-const char kSerialBridgeCommands[] PROGMEM = D_CMND_SSERIALSEND "|" D_CMND_SBAUDRATE;
-
-void (* const SerialBridgeCommand[])(void) PROGMEM = { &CmndSSerialSend, &CmndSBaudrate };
 
 TasmotaSerial *SerialBridgeSerial = nullptr;
 
@@ -70,7 +72,7 @@ void SerialBridgeInput(void)
     serial_bridge_buffer[serial_bridge_in_byte_counter] = 0;                   // Serial data completed
     char hex_char[(serial_bridge_in_byte_counter * 2) + 2];
     Response_P(PSTR("{\"" D_JSON_SSERIALRECEIVED "\":\"%s\"}"),
-      (serial_bridge_raw) ? ToHex((unsigned char*)serial_bridge_buffer, serial_bridge_in_byte_counter, hex_char, sizeof(hex_char)) : serial_bridge_buffer);
+      (serial_bridge_raw) ? ToHex_P((unsigned char*)serial_bridge_buffer, serial_bridge_in_byte_counter, hex_char, sizeof(hex_char)) : serial_bridge_buffer);
     MqttPublishPrefixTopic_P(RESULT_OR_TELE, PSTR(D_JSON_SSERIALRECEIVED));
     XdrvRulesProcess();
     serial_bridge_in_byte_counter = 0;
@@ -84,7 +86,7 @@ void SerialBridgeInit(void)
   serial_bridge_active = false;
   if ((pin[GPIO_SBR_RX] < 99) && (pin[GPIO_SBR_TX] < 99)) {
     SerialBridgeSerial = new TasmotaSerial(pin[GPIO_SBR_RX], pin[GPIO_SBR_TX]);
-    if (SerialBridgeSerial->begin(Settings.sbaudrate * 1200)) {  // Baud rate is stored div 1200 so it fits into one byte
+    if (SerialBridgeSerial->begin(Settings.sbaudrate * 300)) {  // Baud rate is stored div 300 so it fits into 16 bits
       if (SerialBridgeSerial->hardwareSerial()) {
         ClaimSerial();
         serial_bridge_buffer = serial_in_buffer;  // Use idle serial buffer to save RAM
@@ -139,11 +141,12 @@ void CmndSSerialSend(void)
 
 void CmndSBaudrate(void)
 {
-  if (XdrvMailbox.payload > 1200) {
-    Settings.sbaudrate /= 1200;  // Make it a valid baudrate
-    SerialBridgeSerial->begin(Settings.sbaudrate * 1200);  // Reinitialize serial port with new baud rate
+  if (XdrvMailbox.payload >= 300) {
+    XdrvMailbox.payload /= 300;  // Make it a valid baudrate
+    Settings.sbaudrate = XdrvMailbox.payload;
+    SerialBridgeSerial->begin(Settings.sbaudrate * 300);  // Reinitialize serial port with new baud rate
   }
-  ResponseCmndNumber(Settings.sbaudrate * 1200);
+  ResponseCmndNumber(Settings.sbaudrate * 300);
 }
 
 /*********************************************************************************************\
