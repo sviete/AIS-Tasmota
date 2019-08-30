@@ -1,10 +1,36 @@
 /*********************************************************************************************\
+ * 6.6.0.9 20190828
+ * Change theoretical baudrate range to 300..19660500 bps in 300 increments (#6294)
+ * Add Full support of all protocols in IRremoteESP8266, to be used on dedicated-IR Tasmota version. Warning: +81k Flash when compiling with USE_IR_REMOTE_FULL
+ * Add compile time define USE_WS2812_HARDWARE to select hardware type WS2812, WS2812X, WS2813, SK6812, LC8812 or APA106 (DMA mode only)
+ *
+ * 6.6.0.8 20190827
+ * Add Tuya Energy monitoring by Shantur Rathore
+ * Add phase 1 Domoticz P1 Smart Meter support using energy sensors handled by xdrv_03_energy.ino based on an idea by pablozg
+ *   Add commands Tariff1 0..23 (start Off-Peak hour), Tariff2 0..23 (start Standard hour) and Tariff3 0/1 (Saturday and Sunday Off-Peak)
+ *
+ * 6.6.0.7 20190825
+ * Expand Settings area to 4k for future use
+ *
+ * 6.6.0.6 20190819
+ * Add I2C display driver for SH1106 oled by Gerhard Mutz
+ * Add SPI display drivers for epaper 4.2 inch, ILI9488 TFT, SSD1351 Color oled and RA8876 TFT by Gerhard Mutz
+ * Add support for HM17 bluetooth LE passive scan of ibeacon devices by Gerhard Mutz
+ *
+ * 6.6.0.5 20190816
+ * Add command WebSensor<sensor number> 0/1 to control display of sensor data in web GUI (#6085)
+ * Change some table locations from RAM to Flash
+ * Fix wrong telemetry message when SetOption68 1 (#6191)
+ * Add support for RDM6300 125kHz RFID Reader by Gerhard Mutz
+ *
  * 6.6.0.4 20190806
  * Add support for CHIRP soil moisture sensor by Christian Baars
  * Add debug compile features using defines DEBUG_TASMOTA_CORE, DEBUG_TASMOTA_DRIVER and DEBUG_TASMOTA_SENSOR.
  *   See DEBUG_CORE_LOG example in sonoff.ino and DEBUG_DRIVER_LOG example in xdrv_09_timers.ino
  * Add support for Solax X1 inverter by Pablo Zerón
  * Add ZigBee support phase 1 - low level MQTT ZNP messages for CC2530 devices
+ * Add command Buzzer with optional parameters <number of beeps>,<duration of beep in 100mS steps>,<duration of silence in 100mS steps> enabled when a buzzer is configured (#5988)
+ * Add support for PAJ7620 gesture sensor by Christian Baars
  *
  * 6.6.0.3 20190725
  * Change filename of configuration backup from using FriendlyName1 to Hostname solving diacritic issues (#2422)

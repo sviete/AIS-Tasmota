@@ -233,9 +233,6 @@
 #define D_CMND_PWM "PWM"
 #define D_CMND_PWMFREQUENCY "PWMFrequency"
 #define D_CMND_PWMRANGE "PWMRange"
-#define D_CMND_COUNTER "Counter"
-#define D_CMND_COUNTERTYPE "CounterType"
-#define D_CMND_COUNTERDEBOUNCE "CounterDebounce"
 #define D_CMND_BUTTONDEBOUNCE "ButtonDebounce"
 #define D_CMND_SWITCHDEBOUNCE "SwitchDebounce"
 #define D_CMND_SLEEP "Sleep"
@@ -327,6 +324,7 @@
 #define D_CMND_WEBREFRESH "WebRefresh"
 #define D_CMND_WEBSEND "WebSend"
 #define D_CMND_WEBCOLOR "WebColor"
+#define D_CMND_WEBSENSOR "WebSensor"
 #define D_CMND_EMULATION "Emulation"
 
 // Commands xdrv_03_energy.ino
@@ -384,14 +382,29 @@
   #define D_JSON_IR_PROTOCOL "Protocol"
   #define D_JSON_IR_BITS "Bits"
   #define D_JSON_IR_DATA "Data"
+  #define D_JSON_IR_DATALSB "DataLSB"
   #define D_JSON_IR_RAWDATA "RawData"
   #define D_JSON_IR_REPEAT "Repeat"
 #define D_CMND_IRHVAC "IRHVAC"
-  #define D_JSON_IRHVAC_VENDOR "VENDOR"
-  #define D_JSON_IRHVAC_POWER "POWER"
-  #define D_JSON_IRHVAC_MODE "MODE"
-  #define D_JSON_IRHVAC_FANSPEED "FANSPEED"
-  #define D_JSON_IRHVAC_TEMP "TEMP"
+  #define D_JSON_IRHVAC_VENDOR "Vendor"
+  #define D_JSON_IRHVAC_PROTOCOL "Protocol"
+  #define D_JSON_IRHVAC_MODEL "Model"
+  #define D_JSON_IRHVAC_POWER "Power"
+  #define D_JSON_IRHVAC_MODE "Mode"
+  #define D_JSON_IRHVAC_FANSPEED "FanSpeed"
+  #define D_JSON_IRHVAC_TEMP "Temp"
+  #define D_JSON_IRHVAC_CELSIUS "Celsius"
+  #define D_JSON_IRHVAC_SWINGV "SwingV"
+  #define D_JSON_IRHVAC_SWINGH "SwingH"
+  #define D_JSON_IRHVAC_LIGHT "Light"
+  #define D_JSON_IRHVAC_BEEP "Beep"
+  #define D_JSON_IRHVAC_ECONO "Econo"
+  #define D_JSON_IRHVAC_FILTER "Filter"
+  #define D_JSON_IRHVAC_TURBO "Turbo"
+  #define D_JSON_IRHVAC_QUIET "Quiet"
+  #define D_JSON_IRHVAC_CLEAN "Clean"
+  #define D_JSON_IRHVAC_SLEEP "Sleep"
+  #define D_JSON_IRHVAC_CLOCK "Clock"
 #define D_JSON_IRRECEIVED "IrReceived"
 
 // Commands xdrv_06_snfbridge.ino
@@ -410,14 +423,6 @@
 #define D_CMND_RFSYNC "RfSync"
   #define D_JSON_RFRECEIVED "RfReceived"
 #define D_CMND_RFRAW "RfRaw"
-
-// Commands xdrv_07_domoticz.ino
-#define D_CMND_DOMOTICZ "Domoticz"
-#define D_CMND_IDX "Idx"
-#define D_CMND_KEYIDX "KeyIdx"
-#define D_CMND_SWITCHIDX "SwitchIdx"
-#define D_CMND_SENSORIDX "SensorIdx"
-#define D_CMND_UPDATETIMER "UpdateTimer"
 
 // Commands xdrv_08_serial_bridge.ino
 #define D_CMND_SSERIALSEND "SSerialSend"
@@ -439,9 +444,6 @@
 #define D_CMND_LATITUDE "Latitude"
 #define D_CMND_LONGITUDE "Longitude"
 
-// Commands xdrv_23_zigbee.ino
-#define D_CMND_ZIGBEEZNPSEND "ZigbeeZNPSend"
-  #define D_JSON_ZIGBEEZNPRECEIVED "ZigbeeZNPReceived"
 /********************************************************************************************/
 
 #define D_ASTERISK_PWD "****"

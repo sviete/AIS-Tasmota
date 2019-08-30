@@ -38,7 +38,7 @@
 
 #define XDRV_09             9
 
-const char kTimerCommands[] PROGMEM =
+const char kTimerCommands[] PROGMEM = "|"  // No prefix
   D_CMND_TIMER "|" D_CMND_TIMERS
 #ifdef USE_SUNRISE
   "|" D_CMND_LATITUDE "|" D_CMND_LONGITUDE
@@ -137,7 +137,7 @@ void DuskTillDawn(uint8_t *hour_up,uint8_t *minute_up, uint8_t *hour_down, uint8
 //  double Zeitzone = 0; //Weltzeit
 //  double Zeitzone = 1; //Winterzeit
 //  double Zeitzone = 2.0;   //Sommerzeit
-  float Zeitzone = ((float)time_timezone) / 60;
+  float Zeitzone = ((float)Rtc.time_timezone) / 60;
   float Zeitgleichung = BerechneZeitgleichung(&DK, T);
   float Zeitdifferenz = 12.0f*acosf((sinf(h) - sinf(B)*sinf(DK)) / (cosf(B)*cosf(DK)))/pi;
   float AufgangOrtszeit = 12.0f - Zeitdifferenz - Zeitgleichung;

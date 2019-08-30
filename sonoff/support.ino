@@ -293,23 +293,23 @@ char* ulltoa(unsigned long long value, char *str, int radix)
 }
 
 // see https://stackoverflow.com/questions/6357031/how-do-you-convert-a-byte-array-to-a-hexadecimal-string-in-c
-// char* ToHex(unsigned char * in, size_t insz, char * out, size_t outsz, char inbetween = '\0'); in sonoff_post.h
-char* ToHex(unsigned char * in, size_t insz, char * out, size_t outsz, char inbetween)
+// char* ToHex_P(unsigned char * in, size_t insz, char * out, size_t outsz, char inbetween = '\0'); in sonoff_post.h
+char* ToHex_P(const unsigned char * in, size_t insz, char * out, size_t outsz, char inbetween)
 {
-  // ToHex(in, insz, out, outz)      -> "12345667"
-  // ToHex(in, insz, out, outz, ' ') -> "12 34 56 67"
-  // ToHex(in, insz, out, outz, ':') -> "12:34:56:67"
+  // ToHex_P(in, insz, out, outz)      -> "12345667"
+  // ToHex_P(in, insz, out, outz, ' ') -> "12 34 56 67"
+  // ToHex_P(in, insz, out, outz, ':') -> "12:34:56:67"
   static const char * hex = "0123456789ABCDEF";
   int between = (inbetween) ? 3 : 2;
-  unsigned char * pin = in;
+  const unsigned char * pin = in;
   char * pout = out;
   for (; pin < in+insz; pout += between, pin++) {
-    pout[0] = hex[(*pin>>4) & 0xF];
-    pout[1] = hex[ *pin     & 0xF];
+    pout[0] = hex[(pgm_read_byte(pin)>>4) & 0xF];
+    pout[1] = hex[ pgm_read_byte(pin)     & 0xF];
     if (inbetween) { pout[2] = inbetween; }
     if (pout + 3 - out > outsz) { break; }  // Better to truncate output string than overflow buffer
   }
-  pout[(inbetween) ? -1 : 0] = 0;  // Discard last inbetween
+  pout[(inbetween && insz) ? -1 : 0] = 0;   // Discard last inbetween if any input
   return out;
 }
 
@@ -738,14 +738,15 @@ int GetCommandCode(char* destination, size_t destination_size, const char* needl
 
 bool DecodeCommand(const char* haystack, void (* const MyCommand[])(void))
 {
-  bool result = false;
-
-  int command_code = GetCommandCode(XdrvMailbox.command, CMDSZ, XdrvMailbox.topic, haystack);
-  if (command_code >= 0) {
-    MyCommand[command_code]();
-    result = true;
+  GetTextIndexed(XdrvMailbox.command, CMDSZ, 0, haystack);  // Get prefix if available
+  int prefix_length = strlen(XdrvMailbox.command);
+  int command_code = GetCommandCode(XdrvMailbox.command + prefix_length, CMDSZ, XdrvMailbox.topic + prefix_length, haystack);
+  if (command_code > 0) {                                   // Skip prefix
+    XdrvMailbox.command_code = command_code -1;
+    MyCommand[XdrvMailbox.command_code]();
+    return true;
   }
-  return result;
+  return false;
 }
 
 int GetStateNumber(char *state_text)
@@ -773,7 +774,7 @@ int GetStateNumber(char *state_text)
 
 void SetSerialBaudrate(int baudrate)
 {
-  Settings.baudrate = baudrate / 1200;
+  Settings.baudrate = baudrate / 300;
   if (Serial.baudRate() != baudrate) {
     if (seriallog_level) {
       AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_APPLICATION D_SET_BAUDRATE_TO " %d"), baudrate);
@@ -792,7 +793,7 @@ void ClaimSerial(void)
   AddLog_P(LOG_LEVEL_INFO, PSTR("SNS: Hardware Serial"));
   SetSeriallog(LOG_LEVEL_NONE);
   baudrate = Serial.baudRate();
-  Settings.baudrate = baudrate / 1200;
+  Settings.baudrate = baudrate / 300;
 }
 
 void SerialSendRaw(char *codes)
@@ -1553,11 +1554,11 @@ void AddLogBuffer(uint32_t loglevel, uint8_t *buffer, uint32_t count)
 */
 /*
   strcpy_P(log_data, PSTR("DMP: "));
-  ToHex(buffer, count, log_data + strlen(log_data), sizeof(log_data) - strlen(log_data), ' ');
+  ToHex_P(buffer, count, log_data + strlen(log_data), sizeof(log_data) - strlen(log_data), ' ');
   AddLog(loglevel);
 */
-  char hex_char[count * 3];
-  AddLog_P2(loglevel, PSTR("DMP: %s"), ToHex(buffer, count, hex_char, sizeof(hex_char), ' '));
+  char hex_char[(count * 3) + 2];
+  AddLog_P2(loglevel, PSTR("DMP: %s"), ToHex_P(buffer, count, hex_char, sizeof(hex_char), ' '));
 }
 
 void AddLogSerial(uint32_t loglevel)

@@ -400,6 +400,7 @@
   #define D_DOMOTICZ_VOLTAGE "电压/PM2.5"
   #define D_DOMOTICZ_CURRENT "电流/PM10"
   #define D_DOMOTICZ_AIRQUALITY "空气质量"
+  #define D_DOMOTICZ_P1_SMART_METER "P1SmartMeter"
 #define D_DOMOTICZ_UPDATE_TIMER "更新计时器"
 
 // xdrv_09_timers.ino
@@ -591,6 +592,10 @@
 #define D_SENSOR_ZIGBEE_RXD    "Zigbee Rx"
 #define D_SENSOR_SOLAXX1_TX    "SolaxX1 Tx"
 #define D_SENSOR_SOLAXX1_RX    "SolaxX1 Rx"
+#define D_SENSOR_IBEACON_TX    "iBeacon TX"
+#define D_SENSOR_IBEACON_RX    "iBeacon RX"
+#define D_SENSOR_RDM6300_RX    "RDM6300 RX"
+#define D_SENSOR_CC1101_CS     "CC1101 CS"
 
 // Units
 #define D_UNIT_AMPERE "安"

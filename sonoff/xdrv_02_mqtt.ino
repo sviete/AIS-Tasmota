@@ -28,7 +28,7 @@
   WiFiClient EspClient;                     // Wifi Client
 #endif
 
-const char kMqttCommands[] PROGMEM =
+const char kMqttCommands[] PROGMEM = "|"  // No prefix
 #if defined(USE_MQTT_TLS) && !defined(USE_MQTT_TLS_CA_CERT)
   D_CMND_MQTTFINGERPRINT "|"
 #endif
@@ -56,16 +56,16 @@ void (* const MqttCommand[])(void) PROGMEM = {
   &CmndFullTopic, &CmndPrefix, &CmndGroupTopic, &CmndTopic, &CmndPublish,
   &CmndButtonTopic, &CmndSwitchTopic, &CmndButtonRetain, &CmndSwitchRetain, &CmndPowerRetain, &CmndSensorRetain };
 
-IPAddress mqtt_host_addr;                   // MQTT host IP address
-uint32_t mqtt_host_hash = 0;                // MQTT host name hash
+struct MQTT {
+  uint16_t connect_count = 0;            // MQTT re-connect count
+  uint16_t retry_counter = 1;            // MQTT connection retry counter
+  uint8_t initial_connection_state = 2;  // MQTT connection messages state
+  bool connected = false;                // MQTT virtual connection status
+  bool allowed = false;                  // MQTT enabled and parameters valid
+  String AisGateIPAddress = "";
+  uint16_t ais_retry_counter = 1;            // AIS ask for gate retry counter
+} Mqtt;
 
-uint16_t mqtt_connect_count = 0;            // MQTT re-connect count
-uint16_t mqtt_retry_counter = 1;            // MQTT connection retry counter
-uint8_t mqtt_initial_connection_state = 2;  // MQTT connection messages state
-bool mqtt_connected = false;                // MQTT virtual connection status
-bool mqtt_allowed = false;                  // MQTT enabled and parameters valid
-String AisGateIPAddress = "";
-uint16_t ais_retry_counter = 1;            // AIS ask for gate retry counter
 #ifdef USE_MQTT_TLS
 
 #ifdef USE_MQTT_AWS_IOT
@@ -151,7 +151,7 @@ void MakeValidMqtt(uint32_t option, char* str)
 /*********************************************************************************************/
 void MqttDiscoverServer(void)
 {
-  ais_retry_counter = 180;
+  Mqtt.ais_retry_counter = 180;
   snprintf_P(log_data, sizeof(log_data), "AIS: Pytam AI-Speaker o lokalne IP bramki: %s", String(Settings.mqtt_host).c_str());
   AddLog(LOG_LEVEL_INFO);
   WiFiClient client;
@@ -169,8 +169,8 @@ void MqttDiscoverServer(void)
         int s = line.indexOf("###ais###");
         int e = line.indexOf("###dom###");
         if ((s > -1) && (e > 0)){
-          AisGateIPAddress = line.substring(s+9, e);
-          snprintf_P(log_data, sizeof(log_data),"Odpowiedz z AI-Speaker, IP: %s", AisGateIPAddress.c_str());
+          Mqtt.AisGateIPAddress = line.substring(s+9, e);
+          snprintf_P(log_data, sizeof(log_data),"Odpowiedz z AI-Speaker, IP: %s", Mqtt.AisGateIPAddress.c_str());
           AddLog(LOG_LEVEL_INFO);
         } else {
           snprintf_P(log_data, sizeof(log_data), line.c_str());
@@ -306,7 +306,7 @@ void MqttDataHandler(char* topic, uint8_t* data, unsigned int data_len)
 
 void MqttRetryCounter(uint8_t value)
 {
-  mqtt_retry_counter = value;
+  Mqtt.retry_counter = value;
 }
 
 void MqttSubscribe(const char *topic)
@@ -467,20 +467,20 @@ void MqttPublishPowerBlinkState(uint32_t device)
 
 uint16_t MqttConnectCount()
 {
-  return mqtt_connect_count;
+  return Mqtt.connect_count;
 }
 
 void MqttDisconnected(int state)
 {
-  mqtt_connected = false;
-  mqtt_retry_counter = Settings.mqtt_retry;
+  Mqtt.connected = false;
+  Mqtt.retry_counter = Settings.mqtt_retry;
 
   MqttClient.disconnect();
 
-  if (AisGateIPAddress != ""){
-      AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MQTT D_CONNECT_FAILED_TO " %s:%d, rc %d. " D_RETRY_IN " %d " D_UNIT_SECOND), AisGateIPAddress.c_str(), Settings.mqtt_port, state, mqtt_retry_counter);
+  if (Mqtt.AisGateIPAddress != ""){
+      AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MQTT D_CONNECT_FAILED_TO " %s:%d, rc %d. " D_RETRY_IN " %d " D_UNIT_SECOND), Mqtt.AisGateIPAddress.c_str(), Settings.mqtt_port, state, Mqtt.retry_counter);
     } else {
-      AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MQTT D_CONNECT_FAILED_TO " %s:%d, rc %d. " D_RETRY_IN " %d " D_UNIT_SECOND), Settings.mqtt_host, Settings.mqtt_port, state, mqtt_retry_counter);
+      AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MQTT D_CONNECT_FAILED_TO " %s:%d, rc %d. " D_RETRY_IN " %d " D_UNIT_SECOND), Settings.mqtt_host, Settings.mqtt_port, state, Mqtt.retry_counter);
    }
 
   rules_flag.mqtt_disconnected = 1;
@@ -490,12 +490,12 @@ void MqttConnected(void)
 {
   char stopic[TOPSZ];
 
-  if (mqtt_allowed) {
+  if (Mqtt.allowed) {
     AddLog_P(LOG_LEVEL_INFO, S_LOG_MQTT, PSTR(D_CONNECTED));
-    mqtt_connected = true;
-    mqtt_retry_counter = 0;
-    ais_retry_counter = 0;
-    mqtt_connect_count++;
+    Mqtt.connected = true;
+    Mqtt.retry_counter = 0;
+    Mqtt.connect_count++;
+    Mqtt.ais_retry_counter = 0;
 
     GetTopic_P(stopic, TELE, mqtt_topic, S_LWT);
     Response_P(PSTR(D_ONLINE));
@@ -517,7 +517,7 @@ void MqttConnected(void)
     XdrvCall(FUNC_MQTT_SUBSCRIBE);
   }
 
-  if (mqtt_initial_connection_state) {
+  if (Mqtt.initial_connection_state) {
     Response_P(PSTR("{\"" D_CMND_MODULE "\":\"%s\",\"" D_JSON_VERSION "\":\"%s%s\",\"" D_JSON_FALLBACKTOPIC "\":\"%s\",\"" D_CMND_GROUPTOPIC "\":\"%s\"}"),
       ModuleName().c_str(), my_version, my_image, GetFallbackTopic_P(stopic, CMND, ""), Settings.mqtt_grptopic);
     MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_INFO "1"));
@@ -535,7 +535,7 @@ void MqttConnected(void)
     rules_flag.system_boot = 1;
     XdrvCall(FUNC_MQTT_INIT);
   }
-  mqtt_initial_connection_state = 0;
+  Mqtt.initial_connection_state = 0;
 
   global_state.mqtt_down = 0;
   if (Settings.flag.mqtt_enabled) {
@@ -547,27 +547,27 @@ void MqttReconnect(void)
 {
   char stopic[TOPSZ];
 
-  mqtt_allowed = Settings.flag.mqtt_enabled;
-  if (mqtt_allowed) {
+  Mqtt.allowed = Settings.flag.mqtt_enabled;
+  if (Mqtt.allowed) {
     // ask for gate ip only if the mdns hostname starts with dom-
     if(String(Settings.mqtt_host).indexOf("dom-") != -1) {
-      if (!ais_retry_counter){
+      if (!Mqtt.ais_retry_counter){
         MqttDiscoverServer();
       } else {
-        AddLog_P2(LOG_LEVEL_DEBUG_MORE, PSTR("AIS: Zapytam AI-Speaker o IP za %d sekund"), ais_retry_counter);
+        AddLog_P2(LOG_LEVEL_DEBUG_MORE, PSTR("AIS: Zapytam AI-Speaker o IP za %d sekund"), Mqtt.ais_retry_counter);
       }
    }
     if (!strlen(Settings.mqtt_host) || !Settings.mqtt_port) {
-      mqtt_allowed = false;
+      Mqtt.allowed = false;
     }
 #if defined(USE_MQTT_TLS) && defined(USE_MQTT_AWS_IOT)
     // don't enable MQTT for AWS IoT if Private Key or Certificate are not set
     if (!AWS_IoT_Private_Key || !AWS_IoT_Client_Certificate) {
-      mqtt_allowed = false;
+      Mqtt.allowed = false;
     }
 #endif
   }
-  if (!mqtt_allowed) {
+  if (!Mqtt.allowed) {
     MqttConnected();
     return;
   }
@@ -578,8 +578,8 @@ void MqttReconnect(void)
 
   AddLog_P(LOG_LEVEL_INFO, S_LOG_MQTT, PSTR(D_ATTEMPTING_CONNECTION));
 
-  mqtt_connected = false;
-  mqtt_retry_counter = Settings.mqtt_retry;
+  Mqtt.connected = false;
+  Mqtt.retry_counter = Settings.mqtt_retry;
   global_state.mqtt_down = 1;
 
   char *mqtt_user = nullptr;
@@ -598,8 +598,8 @@ void MqttReconnect(void)
   MqttClient.setClient(EspClient);
 #endif
 
-  if (2 == mqtt_initial_connection_state) {  // Executed once just after power on and wifi is connected
-    mqtt_initial_connection_state = 1;
+  if (2 == Mqtt.initial_connection_state) {  // Executed once just after power on and wifi is connected
+    Mqtt.initial_connection_state = 1;
   }
 
   MqttClient.setCallback(MqttDataHandler);
@@ -610,8 +610,8 @@ void MqttReconnect(void)
                              0xFFFF /* all usages, don't care */, 0);
   MqttClient.setServer(AWS_endpoint, Settings.mqtt_port);
 #else
-  if (AisGateIPAddress != ""){
-     MqttClient.setServer(AisGateIPAddress.c_str(), Settings.mqtt_port);
+  if (Mqtt.AisGateIPAddress != ""){
+     MqttClient.setServer(Mqtt.AisGateIPAddress.c_str(), Settings.mqtt_port);
    } else {
    MqttClient.setServer(Settings.mqtt_host, Settings.mqtt_port);
   }
@@ -644,7 +644,7 @@ void MqttReconnect(void)
 #ifndef USE_MQTT_TLS_CA_CERT  // don't bother with fingerprints if using CA validation
     // create a printable version of the fingerprint received
     char buf_fingerprint[64];
-    ToHex((unsigned char *)tlsClient->getRecvPubKeyFingerprint(), 20, buf_fingerprint, sizeof(buf_fingerprint), ' ');
+    ToHex_P((unsigned char *)tlsClient->getRecvPubKeyFingerprint(), 20, buf_fingerprint, sizeof(buf_fingerprint), ' ');
     AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_MQTT "Server fingerprint: %s"), buf_fingerprint);
 
     if (learn_fingerprint1 || learn_fingerprint2) {
@@ -686,23 +686,23 @@ void MqttCheck(void)
   if (Settings.flag.mqtt_enabled) {
     if (!MqttIsConnected()) {
       global_state.mqtt_down = 1;
-      if (!mqtt_retry_counter) {
+      if (!Mqtt.retry_counter) {
 #ifdef USE_DISCOVERY
 #ifdef MQTT_HOST_DISCOVERY
-        if (!strlen(Settings.mqtt_host) && !mdns_begun) { return; }
+        if (!strlen(Settings.mqtt_host) && !Wifi.mdns_begun) { return; }
 #endif  // MQTT_HOST_DISCOVERY
 #endif  // USE_DISCOVERY
         MqttReconnect();
       } else {
-        mqtt_retry_counter--;
-        ais_retry_counter--;
+        Mqtt.ais_retry_counter--;
+        Mqtt.retry_counter--;
       }
     } else {
       global_state.mqtt_down = 0;
     }
   } else {
     global_state.mqtt_down = 0;
-    if (mqtt_initial_connection_state) MqttReconnect();
+    if (Mqtt.initial_connection_state) MqttReconnect();
   }
 }
 
@@ -723,7 +723,7 @@ void CmndMqttFingerprint(void)
       }
       restart_flag = 2;
     }
-    ResponseCmndIdxChar(ToHex((unsigned char *)Settings.mqtt_fingerprint[XdrvMailbox.index -1], 20, fingerprint, sizeof(fingerprint), ' '));
+    ResponseCmndIdxChar(ToHex_P((unsigned char *)Settings.mqtt_fingerprint[XdrvMailbox.index -1], 20, fingerprint, sizeof(fingerprint), ' '));
   }
 }
 #endif
@@ -780,7 +780,7 @@ void CmndMqttRetry(void)
 {
   if ((XdrvMailbox.payload >= MQTT_RETRY_SECS) && (XdrvMailbox.payload < 32001)) {
     Settings.mqtt_retry = XdrvMailbox.payload;
-    mqtt_retry_counter = Settings.mqtt_retry;
+    Mqtt.retry_counter = Settings.mqtt_retry;
   }
   ResponseCmndNumber(Settings.mqtt_retry);
 }
