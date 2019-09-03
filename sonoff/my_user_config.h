@@ -425,8 +425,9 @@
 #define USE_PZEM_AC                              // Add support for PZEM014,016 Energy monitor (+1k1 code)
 #define USE_PZEM_DC                              // Add support for PZEM003,017 Energy monitor (+1k1 code)
 #define USE_MCP39F501                            // Add support for MCP39F501 Energy monitor as used in Shelly 2 (+3k1 code)
+//#define USE_SDM120_2                             // Add support for Eastron SDM120-Modbus energy meter (+1k4 code)
 
-//#define USE_SDM120                               // Add support for Eastron SDM120-Modbus energy meter (+1k7 code)
+//#define USE_SDM120                               // Add support for Eastron SDM120-Modbus energy meter (+2k4 code)
   #define SDM120_SPEED         2400              // SDM120-Modbus RS485 serial speed (default: 2400 baud)
   #define USE_SDM220                             // Add extra parameters for SDM220 (+0k1 code)
 //#define USE_SDM630                               // Add support for Eastron SDM630-Modbus energy meter (+2k code)
@@ -487,6 +488,12 @@
 
 // -- Zigbee interface ----------------------------
 //#define USE_ZIGBEE                               // Enable serial communication with Zigbee CC2530 flashed with ZNP
+  #define USE_ZIGBEE_PANID  0x1A63               // arbitrary PAN ID for Zigbee network, must be unique in the home
+  #define USE_ZIGBEE_EXTPANID 0xCCCCCCCCCCCCCCCCL // arbitrary extended PAN ID
+  #define USE_ZIGBEE_CHANNEL  0x00000800         // Zigbee Channel (11)
+  #define USE_ZIGBEE_PRECFGKEY_L 0x0F0D0B0907050301L  // note: changing requires to re-pair all devices
+  #define USE_ZIGBEE_PRECFGKEY_H 0x0D0C0A0806040200L  // note: changing requires to re-pair all devices
+  #define USE_ZIGBEE_PERMIT_JOIN false           // don't allow joining by default
 
 // ------------------------------------------------
 
@@ -545,8 +552,12 @@
  * No user configurable items below
 \*********************************************************************************************/
 
-#if defined(USE_MQTT_TLS) && defined(USE_WEBSERVER)
-  #error "Select either USE_MQTT_TLS or USE_WEBSERVER as there is just not enough memory to play with"
+#ifdef USE_CONFIG_OVERRIDE
+  #include "user_config_override.h"         // Configuration overrides for my_user_config.h
+#endif
+
+#if defined(USE_DISCOVERY) && defined(USE_MQTT_AWS_IOT)
+  #error "Select either USE_DISCOVERY or USE_MQTT_AWS_IOT, mDNS takes too much code space and is not needed for AWS IoT"
 #endif
 
 #endif  // _MY_USER_CONFIG_H_
