@@ -303,8 +303,7 @@ void MCP230xx_CheckForInterrupt(void) {
                       break;
                   }
                   if (int_tele) {
-                    ResponseBeginTime();
-                    ResponseAppend_P(PSTR(",\"MCP230XX_INT\":{\"D%i\":%i,\"MS\":%lu}}"),
+                    ResponseTime_P(PSTR(",\"MCP230XX_INT\":{\"D%i\":%i,\"MS\":%lu}}"),
                       intp+(mcp230xx_port*8), ((mcp230xx_intcap >> intp) & 0x01),millis_since_last_int);
                     MqttPublishPrefixTopic_P(RESULT_OR_STAT, PSTR("MCP230XX_INT"));
                   }
@@ -629,15 +628,15 @@ bool MCP230xx_Command(void) {
 #ifdef USE_MCP230xx_OUTPUT
     if (Settings.mcp230xx_config[pin].pinmode >= 5) {
       uint8_t pincmd = Settings.mcp230xx_config[pin].pinmode - 5;
-      if (!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "ON")) {
+      if ((!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "ON")) || (!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "1"))) {
         MCP230xx_SetOutPin(pin,abs(pincmd-1));
         return serviced;
       }
-      if (!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "OFF")) {
+      if ((!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "OFF")) || (!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "0"))) {
         MCP230xx_SetOutPin(pin,pincmd);
         return serviced;
       }
-      if (!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "T"))   {
+      if ((!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "T")) || (!strcmp(subStr(sub_string, XdrvMailbox.data, ",", 2), "2")))  {
         MCP230xx_SetOutPin(pin,2);
         return serviced;
       }
@@ -656,9 +655,9 @@ bool MCP230xx_Command(void) {
       intmode = atoi(subStr(sub_string, XdrvMailbox.data, ",", 4));
     }
 #ifdef USE_MCP230xx_OUTPUT
-    if ((pin < mcp230xx_pincount) && (pinmode > 0) && (pinmode < 7) && (pullup < 2)) {
+    if ((pin < mcp230xx_pincount) && (pinmode > 0) && (pinmode < 7) && (pullup < 2) && (paramcount > 2)) {
 #else // not use OUTPUT
-    if ((pin < mcp230xx_pincount) && (pinmode > 0) && (pinmode < 5) && (pullup < 2)) {
+    if ((pin < mcp230xx_pincount) && (pinmode > 0) && (pinmode < 5) && (pullup < 2) && (paramcount > 2)) {
 #endif // USE_MCP230xx_OUTPUT
       Settings.mcp230xx_config[pin].pinmode=pinmode;
       Settings.mcp230xx_config[pin].pullup=pullup;
@@ -730,8 +729,7 @@ void MCP230xx_OutputTelemetry(void) {
   }
   if (outputcount) {
     char stt[7];
-    ResponseBeginTime();
-    ResponseAppend_P(PSTR(",\"MCP230_OUT\":{"));
+    ResponseTime_P(PSTR(",\"MCP230_OUT\":{"));
     for (uint32_t pinx = 0;pinx < mcp230xx_pincount;pinx++) {
       if (Settings.mcp230xx_config[pinx].pinmode >= 5) {
         sprintf(stt,ConvertNumTxt(((gpiototal>>pinx)&1),Settings.mcp230xx_config[pinx].pinmode));
@@ -746,8 +744,7 @@ void MCP230xx_OutputTelemetry(void) {
 #endif // USE_MCP230xx_OUTPUT
 
 void MCP230xx_Interrupt_Counter_Report(void) {
-  ResponseBeginTime();
-  ResponseAppend_P(PSTR(",\"MCP230_INTTIMER\":{"));
+  ResponseTime_P(PSTR(",\"MCP230_INTTIMER\":{"));
   for (uint32_t pinx = 0;pinx < mcp230xx_pincount;pinx++) {
     if (Settings.mcp230xx_config[pinx].int_count_en) { // Counting is enabled for this pin so we add to report
       ResponseAppend_P(PSTR("\"INTCNT_D%i\":%i,"),pinx,mcp230xx_int_counter[pinx]);
@@ -761,8 +758,7 @@ void MCP230xx_Interrupt_Counter_Report(void) {
 
 void MCP230xx_Interrupt_Retain_Report(void) {
   uint16_t retainresult = 0;
-  ResponseBeginTime();
-  ResponseAppend_P(PSTR(",\"MCP_INTRETAIN\":{"));
+  ResponseTime_P(PSTR(",\"MCP_INTRETAIN\":{"));
   for (uint32_t pinx = 0;pinx < mcp230xx_pincount;pinx++) {
     if (Settings.mcp230xx_config[pinx].int_retain_flag) {
       ResponseAppend_P(PSTR("\"D%i\":%i,"),pinx,mcp230xx_int_retainer[pinx]);

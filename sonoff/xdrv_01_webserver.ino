@@ -91,7 +91,48 @@ const char HTTP_SCRIPT_COUNTER[] PROGMEM =
   "}"
   "wl(u);";
 
+
 const char HTTP_SCRIPT_ROOT[] PROGMEM =
+#ifdef USE_SCRIPT_WEB_DISPLAY
+  "var rfsh=1;"
+  "function la(p){"
+    "var a='';"
+    "if(la.arguments.length==1){"
+      "a=p;"
+      "clearTimeout(lt);"
+    "}"
+    "if(x!=null){x.abort();}"             // Abort if no response within 2 seconds (happens on restart 1)
+    "x=new XMLHttpRequest();"
+    "x.onreadystatechange=function(){"
+      "if(x.readyState==4&&x.status==200){"
+        "var s=x.responseText.replace(/{t}/g,\"<table style='width:100%%'>\").replace(/{s}/g,\"<tr><th>\").replace(/{m}/g,\"</th><td>\").replace(/{e}/g,\"</td></tr>\").replace(/{c}/g,\"%%'><div style='text-align:center;font-weight:\");"
+        "eb('l1').innerHTML=s;"
+      "}"
+    "};"
+    "if (rfsh) {"
+      "x.open('GET','.?m=1'+a,true);"       // ?m related to WebServer->hasArg("m")
+      "x.send();"
+      "lt=setTimeout(la,%d);"               // Settings.web_refresh
+    "}"
+  "}"
+  "function seva(par,ivar){"
+    "la('&sv='+ivar+'_'+par);"
+  "}"
+  "function siva(par,ivar){"
+    "rfsh=1;"
+    "la('&sv='+ivar+'_'+par);"
+    "rfsh=0;"
+  "}"
+  "function pr(f){"
+    "if (f) {"
+      "lt=setTimeout(la,%d);"
+      "rfsh=1;"
+    "} else {"
+      "clearTimeout(lt);"
+      "rfsh=0;"
+    "}"
+  "}"
+#else  // USE_SCRIPT_WEB_DISPLAY
   "function la(p){"
     "var a='';"
     "if(la.arguments.length==1){"
@@ -110,6 +151,7 @@ const char HTTP_SCRIPT_ROOT[] PROGMEM =
     "x.send();"
     "lt=setTimeout(la,%d);"               // Settings.web_refresh
   "}"
+#endif  // USE_SCRIPT_WEB_DISPLAY
 
 #ifdef USE_JAVASCRIPT_ES6
   "lb=p=>la('&d='+p);"                    // Dark - Bright &d related to lb(value) and WebGetArg("d", tmp, sizeof(tmp));
@@ -121,7 +163,29 @@ const char HTTP_SCRIPT_ROOT[] PROGMEM =
   "function lc(p){"
     "la('&t='+p);"                        // &t related to WebGetArg("t", tmp, sizeof(tmp));
   "}"
-#endif
+#endif  // USE_JAVASCRIPT_ES6
+
+#ifdef USE_SHUTTER
+#ifdef USE_JAVASCRIPT_ES6
+  "ld1=p=>la('&u1='+p);"
+  "ld2=p=>la('&u2='+p);"
+  "ld3=p=>la('&u3='+p);"
+  "ld4=p=>la('&u4='+p);"
+#else
+  "function ld1(p){"
+    "la('&u1='+p);"
+  "}"
+  "function ld2(p){"
+    "la('&u2='+p);"
+  "}"
+  "function ld3(p){"
+    "la('&u3='+p);"
+  "}"
+  "function ld4(p){"
+    "la('&u4='+p);"
+  "}"
+#endif  // USE_JAVASCRIPT_ES6
+#endif  // USE_SHUTTER
 
   "wl(la);";
 
@@ -338,6 +402,11 @@ const char HTTP_MSG_SLIDER1[] PROGMEM =
 const char HTTP_MSG_SLIDER2[] PROGMEM =
   "<div><span class='p'>" D_DARKLIGHT "</span><span class='q'>" D_BRIGHTLIGHT "</span></div>"
   "<div><input type='range' min='1' max='100' value='%d' onchange='lb(value)'></div>";
+#ifdef USE_SHUTTER
+const char HTTP_MSG_SLIDER3[] PROGMEM =
+  "<div><span class='p'>" D_CLOSE "</span><span class='q'>" D_OPEN "</span></div>"
+  "<div><input type='range' min='0' max='100' value='%d' onchange='ld%d(value)'></div>";
+#endif  // USE_SHUTTER
 const char HTTP_MSG_RSTRT[] PROGMEM =
   "<br><div style='text-align:center;'>" D_DEVICE_WILL_RESTART "</div><br>";
 
@@ -459,7 +528,7 @@ const char kButtonConfirm[] PROGMEM = D_CONFIRM_RESTART "|" D_CONFIRM_RESET_CONF
 enum CTypes { CT_HTML, CT_PLAIN, CT_XML, CT_JSON, CT_STREAM };
 const char kContentTypes[] PROGMEM = "text/html|text/plain|text/xml|application/json|application/octet-stream";
 
-const char kLoggingOptions[] PROGMEM = D_SERIAL_LOG_LEVEL "|" D_WEB_LOG_LEVEL "|" D_SYS_LOG_LEVEL;
+const char kLoggingOptions[] PROGMEM = D_SERIAL_LOG_LEVEL "|" D_WEB_LOG_LEVEL "|" D_MQTT_LOG_LEVEL "|" D_SYS_LOG_LEVEL;
 const char kLoggingLevels[] PROGMEM = D_NONE "|" D_ERROR "|" D_INFO "|" D_DEBUG "|" D_MORE_DEBUG;
 
 const char kEmulationOptions[] PROGMEM = D_NONE "|" D_BELKIN_WEMO "|" D_HUE_BRIDGE;
@@ -512,6 +581,7 @@ void ShowWebSource(uint32_t source)
 void ExecuteWebCommand(char* svalue, uint32_t source)
 {
   ShowWebSource(source);
+  last_source = source;
   ExecuteCommand(svalue, SRC_IGNORE);
 }
 
@@ -933,7 +1003,11 @@ void HandleRoot(void)
   char stemp[5];
 
   WSContentStart_P(S_MAIN_MENU);
+#ifdef USE_SCRIPT_WEB_DISPLAY
+  WSContentSend_P(HTTP_SCRIPT_ROOT, Settings.web_refresh, Settings.web_refresh);
+#else
   WSContentSend_P(HTTP_SCRIPT_ROOT, Settings.web_refresh);
+#endif
   WSContentSendStyle();
 
   WSContentSend_P(PSTR("<div id='l1' name='l1'></div>"));
@@ -946,6 +1020,13 @@ void HandleRoot(void)
       WSContentSend_P(HTTP_MSG_SLIDER2, Settings.light_dimmer);
     }
 #endif
+#ifdef USE_SHUTTER
+    if (Settings.flag3.shutter_mode) {
+      for (uint32_t i = 0; i < shutters_present; i++) {
+        WSContentSend_P(HTTP_MSG_SLIDER3, Settings.shutter_position[i], i+1);
+      }
+    }
+#endif  // USE_SHUTTER
     WSContentSend_P(HTTP_TABLE100);
     WSContentSend_P(PSTR("<tr>"));
 #ifdef USE_SONOFF_IFAN
@@ -1010,6 +1091,10 @@ bool HandleRootStatusRefresh(void)
     return false;
   }
 
+  #ifdef USE_SCRIPT_WEB_DISPLAY
+    Script_Check_HTML_Setvars();
+  #endif
+
   char tmp[8];                       // WebGetArg numbers only
   char svalue[32];                   // Command and number parameter
 
@@ -1042,6 +1127,17 @@ bool HandleRootStatusRefresh(void)
     snprintf_P(svalue, sizeof(svalue), PSTR(D_CMND_COLORTEMPERATURE " %s"), tmp);
     ExecuteWebCommand(svalue, SRC_WEBGUI);
   }
+#ifdef USE_SHUTTER
+  char webindex[5];                 // WebGetArg name
+  for (uint32_t j = 1; j <= shutters_present; j++) {
+    snprintf_P(webindex, sizeof(webindex), PSTR("u%d"), j);
+    WebGetArg(webindex, tmp, sizeof(tmp));  // 0 - 100 percent
+    if (strlen(tmp)) {
+      snprintf_P(svalue, sizeof(svalue), PSTR("ShutterPosition%d %s"), j, tmp);
+      ExecuteWebCommand(svalue, SRC_WEBGUI);
+    }
+  }
+#endif  // USE_SHUTTER
   WebGetArg("k", tmp, sizeof(tmp));  // 1 - 16 Pre defined RF keys
   if (strlen(tmp)) {
     snprintf_P(svalue, sizeof(svalue), PSTR(D_CMND_RFKEY "%s"), tmp);
@@ -1054,6 +1150,7 @@ bool HandleRootStatusRefresh(void)
 #ifdef USE_SCRIPT_WEB_DISPLAY
   XdrvCall(FUNC_WEB_SENSOR);
 #endif
+
   WSContentSend_P(PSTR("</table>"));
 
   if (devices_present) {
@@ -1522,9 +1619,10 @@ void HandleLoggingConfiguration(void)
   WSContentSend_P(HTTP_FORM_LOG1);
   char stemp1[45];
   char stemp2[32];
-  uint8_t dlevel[3] = { LOG_LEVEL_INFO, LOG_LEVEL_INFO, LOG_LEVEL_NONE };
-  for (uint32_t idx = 0; idx < 3; idx++) {
-    uint32_t llevel = (0==idx)?Settings.seriallog_level:(1==idx)?Settings.weblog_level:Settings.syslog_level;
+  uint8_t dlevel[4] = { LOG_LEVEL_INFO, LOG_LEVEL_INFO, LOG_LEVEL_NONE, LOG_LEVEL_NONE };
+  for (uint32_t idx = 0; idx < 4; idx++) {
+    if ((2==idx) && !Settings.flag.mqtt_enabled) { continue; }
+    uint32_t llevel = (0==idx)?Settings.seriallog_level:(1==idx)?Settings.weblog_level:(2==idx)?Settings.mqttlog_level:Settings.syslog_level;
     WSContentSend_P(PSTR("<p><b>%s</b> (%s)<br><select id='l%d'>"),
       GetTextIndexed(stemp1, sizeof(stemp1), idx, kLoggingOptions),
       GetTextIndexed(stemp2, sizeof(stemp2), dlevel[idx], kLoggingLevels),
@@ -1551,6 +1649,8 @@ void LoggingSaveSettings(void)
   WebGetArg("l1", tmp, sizeof(tmp));
   Settings.weblog_level = (!strlen(tmp)) ? WEB_LOG_LEVEL : atoi(tmp);
   WebGetArg("l2", tmp, sizeof(tmp));
+  Settings.mqttlog_level = (!strlen(tmp)) ? WEB_LOG_LEVEL : atoi(tmp);
+  WebGetArg("l3", tmp, sizeof(tmp));
   SetSyslog((!strlen(tmp)) ? SYS_LOG_LEVEL : atoi(tmp));
   WebGetArg("lh", tmp, sizeof(tmp));
   strlcpy(Settings.syslog_host, (!strlen(tmp)) ? SYS_LOG_HOST : tmp, sizeof(Settings.syslog_host));
@@ -1561,8 +1661,8 @@ void LoggingSaveSettings(void)
   if ((Settings.tele_period > 0) && (Settings.tele_period < 10)) {
     Settings.tele_period = 10;   // Do not allow periods < 10 seconds
   }
-  AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_LOG D_CMND_SERIALLOG " %d, " D_CMND_WEBLOG " %d, " D_CMND_SYSLOG " %d, " D_CMND_LOGHOST " %s, " D_CMND_LOGPORT " %d, " D_CMND_TELEPERIOD " %d"),
-    Settings.seriallog_level, Settings.weblog_level, Settings.syslog_level, Settings.syslog_host, Settings.syslog_port, Settings.tele_period);
+  AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_LOG D_CMND_SERIALLOG " %d, " D_CMND_WEBLOG " %d, " D_CMND_MQTTLOG " %d, " D_CMND_SYSLOG " %d, " D_CMND_LOGHOST " %s, " D_CMND_LOGPORT " %d, " D_CMND_TELEPERIOD " %d"),
+    Settings.seriallog_level, Settings.weblog_level, Settings.mqttlog_level, Settings.syslog_level, Settings.syslog_host, Settings.syslog_port, Settings.tele_period);
 }
 
 /*-------------------------------------------------------------------------------------------*/
@@ -1687,8 +1787,8 @@ void HandleBackupConfiguration(void)
 
   WSSend(200, CT_STREAM, "");
 
-  uint16_t cfg_crc = Settings.cfg_crc;
-  Settings.cfg_crc = GetSettingsCrc();  // Calculate crc (again) as it might be wrong when savedata = 0 (#3918)
+  uint32_t cfg_crc32 = Settings.cfg_crc32;
+  Settings.cfg_crc32 = GetSettingsCrc32();  // Calculate crc (again) as it might be wrong when savedata = 0 (#3918)
 
   memcpy(settings_buffer, &Settings, sizeof(Settings));
   if (Web.config_xor_on_set) {
@@ -1708,7 +1808,7 @@ void HandleBackupConfiguration(void)
 
   SettingsBufferFree();
 
-  Settings.cfg_crc = cfg_crc;  // Restore crc in case savedata = 0 to make sure settings will be noted as changed
+  Settings.cfg_crc32 = cfg_crc32;  // Restore crc in case savedata = 0 to make sure settings will be noted as changed
 }
 
 /*-------------------------------------------------------------------------------------------*/
@@ -2093,12 +2193,13 @@ void HandleUploadLoop(void)
       unsigned long buffer_version = settings_buffer[11] << 24 | settings_buffer[10] << 16 | settings_buffer[9] << 8 | settings_buffer[8];
       if (buffer_version > 0x06000000) {
         uint32_t buffer_size = settings_buffer[3] << 8 | settings_buffer[2];
-        uint16_t buffer_crc = settings_buffer[15] << 8 | settings_buffer[14];
-        uint16_t crc = 0;
-        for (uint32_t i = 0; i < buffer_size; i++) {
-          if ((i < 14) || (i > 15)) { crc += settings_buffer[i]*(i+1); }  // Skip crc
+        if (buffer_version > 0x0606000A) {
+          uint32_t buffer_crc32 = settings_buffer[4095] << 24 | settings_buffer[4094] << 16 | settings_buffer[4093] << 8 | settings_buffer[4092];
+          valid_settings = (GetCfgCrc32(settings_buffer, buffer_size -4) == buffer_crc32);
+        } else {
+          uint16_t buffer_crc16 = settings_buffer[15] << 8 | settings_buffer[14];
+          valid_settings = (GetCfgCrc16(settings_buffer, buffer_size) == buffer_crc16);
         }
-        valid_settings = (buffer_crc == crc);
       } else {
         valid_settings = (settings_buffer[0] == CONFIG_FILE_SIGN);
       }
@@ -2351,6 +2452,151 @@ String UrlEncode(const String& text)
 	return encoded;
 }
 
+#ifdef USE_SENDMAIL
+
+#include "sendemail.h"
+
+//SendEmail(const String& host, const int port, const String& user, const String& passwd, const int timeout, const bool ssl);
+//SendEmail::send(const String& from, const String& to, const String& subject, const String& msg)
+// sendmail [server:port:user:passwd:from:to:subject] data
+// sendmail [*:*:*:*:*:to:subject] data uses defines from user_config
+// sendmail currently only works with core 2.4.2
+
+#define SEND_MAIL_MINRAM 19*1024
+
+uint16_t SendMail(char *buffer) {
+  uint16_t count;
+  char *params,*oparams;
+  char *mserv;
+  uint16_t port;
+  char *user;
+  char *pstr;
+  char *passwd;
+  char *from;
+  char *to;
+  char *subject;
+  char *cmd;
+  char secure=0,auth=0;
+  uint16_t status=1;
+  SendEmail *mail=0;
+
+  //DebugFreeMem();
+
+// return if not enough memory
+  uint16_t mem=ESP.getFreeHeap();
+  if (mem<SEND_MAIL_MINRAM) {
+    return 4;
+  }
+
+  while (*buffer==' ') buffer++;
+
+  // copy params
+  oparams=(char*)calloc(strlen(buffer)+2,1);
+  if (!oparams) return 4;
+
+  params=oparams;
+
+  strcpy(params,buffer);
+
+  if (*params=='p') {
+      auth=1;
+      params++;
+  }
+
+  if (*params!='[') {
+      goto exit;
+  }
+  params++;
+
+  mserv=strtok(params,":");
+  if (!mserv) {
+      goto exit;
+  }
+
+  // port
+  pstr=strtok(NULL,":");
+  if (!pstr) {
+      goto exit;
+  }
+
+#ifdef EMAIL_PORT
+  if (*pstr=='*') {
+    port=EMAIL_PORT;
+  } else {
+    port=atoi(pstr);
+  }
+#else
+  port=atoi(pstr);
+#endif
+
+  user=strtok(NULL,":");
+  if (!user) {
+      goto exit;
+  }
+
+  passwd=strtok(NULL,":");
+  if (!passwd) {
+      goto exit;
+  }
+
+  from=strtok(NULL,":");
+  if (!from) {
+      goto exit;
+  }
+
+  to=strtok(NULL,":");
+  if (!to) {
+      goto exit;
+  }
+
+  subject=strtok(NULL,"]");
+  if (!subject) {
+      goto exit;
+  }
+
+  cmd=subject+strlen(subject)+1;
+
+#ifdef EMAIL_USER
+  if (*user=='*') {
+    user=(char*)EMAIL_USER;
+  }
+#endif
+#ifdef EMAIL_PASSWORD
+  if (*passwd=='*') {
+    passwd=(char*)EMAIL_PASSWORD;
+  }
+#endif
+#ifdef EMAIL_SERVER
+  if (*mserv=='*') {
+    mserv=(char*)EMAIL_SERVER;
+  }
+#endif //USE_SENDMAIL
+
+  // auth = 0 => AUTH LOGIN 1 => PLAIN LOGIN
+  // 2 seconds timeout
+  #define MAIL_TIMEOUT 2000
+  mail = new SendEmail(mserv, port,user,passwd, MAIL_TIMEOUT, auth);
+
+#ifdef EMAIL_FROM
+  if (*from=='*') {
+    from=(char*)EMAIL_FROM;
+  }
+#endif
+
+exit:
+  if (mail) {
+    bool result=mail->send(from,to,subject,cmd);
+    delete mail;
+    if (result==true) status=0;
+  }
+
+
+  if (oparams) free(oparams);
+  return status;
+}
+
+#endif
+
 int WebSend(char *buffer)
 {
   // [sonoff] POWER1 ON                                               --> Sends http://sonoff/cm?cmnd=POWER1 ON
@@ -2463,17 +2709,23 @@ bool JsonWebColor(const char* dataBuf)
   return true;
 }
 
-const char kWebSendStatus[] PROGMEM = D_JSON_DONE "|" D_JSON_WRONG_PARAMETERS "|" D_JSON_CONNECT_FAILED "|" D_JSON_HOST_NOT_FOUND ;
+const char kWebSendStatus[] PROGMEM = D_JSON_DONE "|" D_JSON_WRONG_PARAMETERS "|" D_JSON_CONNECT_FAILED "|" D_JSON_HOST_NOT_FOUND "|" D_JSON_MEMORY_ERROR;
 
 const char kWebCommands[] PROGMEM = "|"  // No prefix
 #ifdef USE_EMULATION
   D_CMND_EMULATION "|"
+#endif
+#ifdef USE_SENDMAIL
+  D_CMND_SENDMAIL "|"
 #endif
   D_CMND_WEBSERVER "|" D_CMND_WEBPASSWORD "|" D_CMND_WEBLOG "|" D_CMND_WEBREFRESH "|" D_CMND_WEBSEND "|" D_CMND_WEBCOLOR "|" D_CMND_WEBSENSOR;
 
 void (* const WebCommand[])(void) PROGMEM = {
 #ifdef USE_EMULATION
   &CmndEmulation,
+#endif
+#ifdef USE_SENDMAIL
+  &CmndSendmail,
 #endif
   &CmndWebServer, &CmndWebPassword, &CmndWeblog, &CmndWebRefresh, &CmndWebSend, &CmndWebColor, &CmndWebSensor };
 
@@ -2500,6 +2752,18 @@ void CmndEmulation(void)
   ResponseCmndNumber(Settings.flag2.emulation);
 }
 #endif  // USE_EMULATION
+
+#ifdef USE_SENDMAIL
+void CmndSendmail(void)
+{
+  if (XdrvMailbox.data_len > 0) {
+    uint8_t result = SendMail(XdrvMailbox.data);
+    char stemp1[20];
+    ResponseCmndChar(GetTextIndexed(stemp1, sizeof(stemp1), result, kWebSendStatus));
+  }
+}
+#endif  // USE_SENDMAIL
+
 
 void CmndWebServer(void)
 {

@@ -78,13 +78,13 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
     uint32_t no_hold_retain : 1;           // bit 12 (v6.4.1.19) - SetOption62 - Don't use retain flag on HOLD messages
     uint32_t no_power_feedback : 1;        // bit 13 (v6.5.0.9)  - SetOption63 - Don't scan relay power state at restart
     uint32_t use_underscore : 1;           // bit 14 (v6.5.0.12) - SetOption64 - Enable "_" instead of "-" as sensor index separator
-    uint32_t tuya_disable_dimmer : 1;      // bit 15 (v6.5.0.15) - SetOption65 - Enable or Disable Tuya Serial Dimmer control
+    uint32_t ex_tuya_disable_dimmer : 1;   // bit 15 (v6.5.0.15) - SetOption65 - (Enable or Disable Tuya Serial Dimmer control) - free since 6.6.0.10
     uint32_t tuya_dimmer_range_255 : 1;    // bit 16 (v6.6.0.1)  - SetOption66 - Enable or Disable Dimmer range 255 slider control
     uint32_t buzzer_enable : 1;            // bit 17 (v6.6.0.1)  - SetOption67 - Enable buzzer when available
     uint32_t pwm_multi_channels : 1;       // bit 18 (v6.6.0.3)  - SetOption68 - Enable multi-channels PWM instead of Color PWM
     uint32_t tuya_dimmer_min_limit : 1;    // bit 19 (v6.6.0.5)  - SetOption69 - Limits Tuya dimmers to minimum of 10% (25) when enabled.
     uint32_t energy_weekend : 1;           // bit 20 (v6.6.0.8)  - CMND_TARIFF
-    uint32_t spare21 : 1;
+    uint32_t dds2382_model : 1;            // bit 21 (v6.6.0.14) - SetOption71 - Select different Modbus registers for Active Energy (#6531)
     uint32_t spare22 : 1;
     uint32_t spare23 : 1;
     uint32_t spare24 : 1;
@@ -93,8 +93,8 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
     uint32_t spare27 : 1;
     uint32_t spare28 : 1;
     uint32_t spare29 : 1;
-    uint32_t spare30 : 1;
-    uint32_t spare31 : 1;
+    uint32_t shutter_mode : 1;             // bit 30 (v6.6.0.14) - SetOption80 - Enable shutter support
+    uint32_t pcf8574_ports_inverted : 1;   // bit 31 (v6.6.0.14) - SetOption81 - Invert all ports on PCF8574 devices
   };
 } SysBitfield3;
 
@@ -105,8 +105,7 @@ typedef union {
     uint32_t spare01 : 1;
     uint32_t spare02 : 1;
     uint32_t spare03 : 1;
-    uint32_t spare04 : 1;
-    uint32_t spare05 : 1;
+    uint32_t time_format : 2;              // (v6.6.0.9) - CMND_TIME
     uint32_t calc_resolution : 3;
     uint32_t weight_resolution : 2;
     uint32_t frequency_resolution : 2;
@@ -172,19 +171,27 @@ typedef union {
     uint8_t spare3 : 1;
     uint8_t spare4 : 1;
     uint8_t spare5 : 1;
-    uint8_t spare6 : 1;
+    uint8_t hx711_json_weight_change : 1;  // Sensor34 8,x - Enable JSON message on weight change
     uint8_t mhz19b_abc_disable : 1;        // Disable ABC (Automatic Baseline Correction for MHZ19(B) (0 = Enabled (default), 1 = Disabled with Sensor15 command)
   };
 } SensorCfg1;
 
 typedef struct {
   uint32_t usage1_kWhtotal;
-  uint32_t usage1_kWhtoday;
+  uint32_t usage2_kWhtotal;
   uint32_t return1_kWhtotal;
   uint32_t return2_kWhtotal;
-  uint32_t last_usage_kWhtotal;
   uint32_t last_return_kWhtotal;
+  uint32_t last_usage_kWhtotal;
 } EnergyUsage;
+
+
+typedef struct {
+  uint8_t fnid = 0;
+  uint8_t dpid = 0;
+} TuyaFnidDpidMap;
+
+const uint8_t MAX_TUYA_FUNCTIONS = 16;
 
 /*
 struct SYSCFG {
@@ -220,9 +227,9 @@ struct SYSCFG {
   uint8_t       weblog_level;              // 1AC
   uint8_t       mqtt_fingerprint[2][20];   // 1AD
   uint8_t       adc_param_type;            // 1D5
-
-  uint8_t       free_1D6[18];              // 1D6  Free since 5.12.0e
-
+  uint8_t       register8[16];             // 1D6 - 16 x 8-bit registers indexed by enum SettingsRegister8
+  uint8_t       shutter_accuracy;          // 1E6
+  uint8_t       mqttlog_level;             // 1E7
   uint8_t       sps30_inuse_hours;         // 1E8
   char          mqtt_host[33];             // 1E9 - Keep together with below as being copied as one chunck with reset 6
   uint16_t      mqtt_port;                 // 20A - Keep together
@@ -364,13 +371,24 @@ struct SYSCFG {
   unsigned long energy_frequency_calibration;  // 7C8 also used by HX711 to save last weight
   uint16_t      web_refresh;               // 7CC
   char          mems[MAX_RULE_MEMS][10];   // 7CE
-  char          rules[MAX_RULE_SETS][MAX_RULE_SIZE]; // 800 uses 512 bytes in v5.12.0m, 3 x 512 bytes in v5.14.0b
-  uint8_t       data8[32];                 // E00
-  uint16_t      data16[16];                // E20
+  char          rules[MAX_RULE_SETS][MAX_RULE_SIZE];  // 800 uses 512 bytes in v5.12.0m, 3 x 512 bytes in v5.14.0b
+  TuyaFnidDpidMap tuya_fnid_map[MAX_TUYA_FUNCTIONS];  // E00    32 bytes
+  uint16_t      ina226_r_shunt[4];         // E20
+  uint16_t      ina226_i_fs[4];            // E28
+  uint16_t      tariff[4][2];              // E30
+  uint16_t      shutter_opentime[MAX_SHUTTERS];      // E40
+  uint16_t      shutter_closetime[MAX_SHUTTERS];     // E48
+  int16_t       shuttercoeff[5][MAX_SHUTTERS];       // E50
+  uint8_t       shutter_invert[MAX_SHUTTERS];        // E78
+  uint8_t       shutter_set50percent[MAX_SHUTTERS];  // E7C
+  uint8_t       shutter_position[MAX_SHUTTERS];      // E80
+  uint8_t       shutter_startrelay[MAX_SHUTTERS];    // E84
+  uint8_t       pcf8574_config[MAX_PCF8574];         // E88
 
-  uint8_t       free_e20[448];             // E40
+  uint8_t       free_e90[360];             // E90
 
-                                           // FFF last location
+  uint32_t      cfg_timestamp;             // FF8
+  uint32_t      cfg_crc32;                 // FFC
 } Settings;
 
 struct RTCRBT {
@@ -418,7 +436,11 @@ struct XDRVMAILBOX {
   char         *command;
 } XdrvMailbox;
 
+#ifdef USE_SHUTTER
+const uint8_t MAX_RULES_FLAG = 10;         // Number of bits used in RulesBitfield (tricky I know...)
+#else
 const uint8_t MAX_RULES_FLAG = 8;          // Number of bits used in RulesBitfield (tricky I know...)
+#endif  // USE_SHUTTER
 typedef union {                            // Restricted by MISRA-C Rule 18.4 but so useful...
   uint16_t data;                           // Allow bit manipulation
   struct {
@@ -430,8 +452,8 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
     uint16_t wifi_connected : 1;
     uint16_t wifi_disconnected : 1;
     uint16_t http_init : 1;
-    uint16_t spare08 : 1;
-    uint16_t spare09 : 1;
+    uint16_t shutter_moved : 1;
+    uint16_t shutter_moving : 1;
     uint16_t spare10 : 1;
     uint16_t spare11 : 1;
     uint16_t spare12 : 1;
