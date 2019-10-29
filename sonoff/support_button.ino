@@ -41,6 +41,7 @@ struct BUTTON {
   uint8_t inverted_mask = 0;                 // Key inverted flag (1 = inverted)
   uint8_t present = 0;                       // Number of buttons found flag
   uint8_t adc = 99;                          // ADC0 button number
+  int ais_restart_flag = 1;                  // AIS dom reset flag
 } Button;
 
 /********************************************************************************************/
@@ -193,6 +194,14 @@ void ButtonHandler(void)
           Button.hold_timer[button_index] = 0;
         } else {
           Button.hold_timer[button_index]++;
+          // AIS dom WiFi on hold
+          if (Button.hold_timer[button_index] == loops_per_second * Settings.param[P_HOLD_TIME] / 10) {  // Button hold
+                AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - start Wi-Fi Manager, button hold %d"), Button.hold_timer[button_index]);
+                // AIS dom WifiConfig 2 always - start Wi-Fi Manager
+                Button.ais_restart_flag = 2;
+                GetTextIndexed(scmnd, sizeof(scmnd), 1, kCommands);
+                ExecuteCommand(scmnd, SRC_BUTTON);
+          }
           if (Settings.flag.button_single) {                   // SetOption13 (0) - Allow only single button press for immediate action
             if (Button.hold_timer[button_index] == loops_per_second * hold_time_extent * Settings.param[P_HOLD_TIME] / 10) {  // SetOption32 (40) - Button held for factor times longer
 //              Settings.flag.button_single = 0;
@@ -250,13 +259,21 @@ void ButtonHandler(void)
                 } else {
                   if (Button.press_counter[button_index] < 3) {  // Single or Double press
                     if (WifiState() > WIFI_RESTART) {          // Wifimanager active
-                      restart_flag = 1;
+                      // AIS dom - do not restart after first press - to support AP on hold
+                      Button.ais_restart_flag--;
+                      if (Button.ais_restart_flag <= 0) {
+                        restart_flag = 1;
+                      }
+                      AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - button pressed, ais_restart_flag %d"), Button.ais_restart_flag);
                     } else {
                       ExecuteCommandPower(button_index + Button.press_counter[button_index], POWER_TOGGLE, SRC_BUTTON);  // Execute Toggle command internally
                     }
                   } else {                                     // 3 - 7 press
                     if (!Settings.flag.button_restrict) {      // SetOption1 (0)
-                      GetTextIndexed(scmnd, sizeof(scmnd), Button.press_counter[button_index] -3, kCommands);
+                      AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - start Wi-Fi Manager, button pressed %d"), Button.press_counter[button_index]);
+                      Button.ais_restart_flag = 1; // next click will restart
+                      // AIS dom WifiConfig 2 always - start Wi-Fi Manager
+		                  GetTextIndexed(scmnd, sizeof(scmnd), 1, kCommands);
                       ExecuteCommand(scmnd, SRC_BUTTON);
                     }
                   }

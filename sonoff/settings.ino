@@ -66,13 +66,13 @@
 #endif
 
 #ifndef COLOR_TEXT
-#define COLOR_TEXT                  "#000"     // Global text color - Black
+#define COLOR_TEXT                  "#ffffff"     // Global text color - Black
 #endif
 #ifndef COLOR_BACKGROUND
-#define COLOR_BACKGROUND            "#fff"     // Global background color - White
+#define COLOR_BACKGROUND            "#2f2f2f"     // Global background color - White
 #endif
 #ifndef COLOR_FORM
-#define COLOR_FORM                  "#f2f2f2"  // Form background color - Greyish
+#define COLOR_FORM                  "#2f2f2f"  // Form background color - Greyish
 #endif
 #ifndef COLOR_INPUT_TEXT
 #define COLOR_INPUT_TEXT            "#000"     // Input text color - Black
@@ -96,10 +96,10 @@
 #define COLOR_BUTTON_TEXT           "#fff"     // Button text color - White
 #endif
 #ifndef COLOR_BUTTON
-#define COLOR_BUTTON                "#1fa3ec"  // Button color - Blueish
+#define COLOR_BUTTON                "#b9babb"  // Button color - Blueish
 #endif
 #ifndef COLOR_BUTTON_HOVER
-#define COLOR_BUTTON_HOVER          "#0e70a4"  // Button color when hovered over - Darker blueish
+#define COLOR_BUTTON_HOVER          "#767879"  // Button color when hovered over - Darker blueish
 #endif
 #ifndef COLOR_BUTTON_RESET
 #define COLOR_BUTTON_RESET          "#d43535"  // Restart/Reset/Delete button color - Redish
@@ -111,7 +111,7 @@
 #define COLOR_BUTTON_SAVE           "#47c266"  // Save button color - Greenish
 #endif
 #ifndef COLOR_BUTTON_SAVE_HOVER
-#define COLOR_BUTTON_SAVE_HOVER     "#5aaf6f"  // Save button color when hovered over - Darker greenish
+#define COLOR_BUTTON_SAVE_HOVER     "#007b20"  // Save button color when hovered over - Darker greenish
 #endif
 #ifndef COLOR_TIMER_TAB_TEXT
 #define COLOR_TIMER_TAB_TEXT        "#fff"     // Config timer tab text color - White

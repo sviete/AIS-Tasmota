@@ -86,7 +86,7 @@ const uint32_t HLW_PREF_PULSE = 12530;      // was 4975us = 201Hz = 1000W
 const uint32_t HLW_UREF_PULSE = 1950;       // was 1666us = 600Hz = 220V
 const uint32_t HLW_IREF_PULSE = 3500;       // was 1666us = 600Hz = 4.545A
 
-const uint8_t MQTT_RETRY_SECS = 10;         // Minimum seconds to retry MQTT connection
+const uint8_t MQTT_RETRY_SECS = 30;         // Minimum seconds to retry MQTT connection
 const uint32_t GLOBAL_VALUES_VALID = 300;   // Max number of seconds to keep last received values
 const power_t APP_POWER = 0;                // Default saved power state Off
 const uint16_t WS2812_MAX_LEDS = 512;       // Max number of LEDs

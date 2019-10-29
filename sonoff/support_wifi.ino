@@ -28,7 +28,7 @@
 #define WIFI_RESCAN_MINUTES     44         // Number of minutes between wifi network rescan
 #endif
 
-const uint8_t WIFI_CONFIG_SEC = 180;       // seconds before restart
+const uint8_t WIFI_CONFIG_SEC = 240;       // seconds before restart
 const uint8_t WIFI_CHECK_SEC = 20;         // seconds
 const uint8_t WIFI_RETRY_OFFSET_SEC = 20;  // seconds
 

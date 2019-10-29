@@ -62,6 +62,7 @@ struct MQTT {
   uint8_t initial_connection_state = 2;  // MQTT connection messages state
   bool connected = false;                // MQTT virtual connection status
   bool allowed = false;                  // MQTT enabled and parameters valid
+  uint16_t ais_retry_counter = 1;        // AIS ask for gate retry counter
 } Mqtt;
 
 #ifdef USE_MQTT_TLS
@@ -146,33 +147,48 @@ void MakeValidMqtt(uint32_t option, char* str)
   }
 }
 
-#ifdef USE_DISCOVERY
-#ifdef MQTT_HOST_DISCOVERY
+/*********************************************************************************************/
 void MqttDiscoverServer(void)
 {
-  if (!Wifi.mdns_begun) { return; }
-
-  int n = MDNS.queryService("mqtt", "tcp");  // Search for mqtt service
-
-  AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS D_QUERY_DONE " %d"), n);
-
-  if (n > 0) {
-    uint32_t i = 0;            // If the hostname isn't set, use the first record found.
-#ifdef MDNS_HOSTNAME
-    for (i = n; i > 0; i--) {  // Search from last to first and use first if not found
-      if (!strcmp(MDNS.hostname(i).c_str(), MDNS_HOSTNAME)) {
-        break;                 // Stop at matching record
+  Mqtt.ais_retry_counter = 180;
+  snprintf_P(log_data, sizeof(log_data), "AIS: AI-Speaker MQTT Client: %s", String(Settings.mqtt_client).c_str());
+  AddLog(LOG_LEVEL_INFO);
+  WiFiClient client;
+  const char* host = "powiedz.co";
+  const uint16_t port = 80;
+  if (client.connect(host, port)){
+    client.print(String("GET /gate_ip_info?id=") + String(Settings.mqtt_client) + " HTTP/1.1\r\n" +
+             "Host: " + host + "\r\n" +
+             "Connection: close\r\n" +
+             "\r\n"
+            );
+    while (client.connected() || client.available()){
+      if (client.available()){
+        String line = client.readStringUntil('\n');
+        int s = line.indexOf("###ais###");
+        int e = line.indexOf("###dom###");
+        if ((s > -1) && (e > 0)){
+          // Save IP from AI-Speaker
+          snprintf_P(Settings.mqtt_host, sizeof(Settings.mqtt_host), line.substring(s+9, e).c_str());
+          snprintf_P(log_data, sizeof(log_data),"AIS: AI-Speaker MQTT HOST: %s", Settings.mqtt_host);
+          AddLog(LOG_LEVEL_INFO);        
+        } else {
+          snprintf_P(log_data, sizeof(log_data), line.c_str());
+          AddLog(LOG_LEVEL_DEBUG_MORE);
+        }
       }
     }
-#endif  // MDNS_HOSTNAME
-    snprintf_P(Settings.mqtt_host, sizeof(Settings.mqtt_host), MDNS.IP(i).toString().c_str());
-    Settings.mqtt_port = MDNS.port(i);
-
-    AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS D_MQTT_SERVICE_FOUND " %s, " D_IP_ADDRESS " %s, " D_PORT " %d"), MDNS.hostname(i).c_str(), Settings.mqtt_host, Settings.mqtt_port);
-  }
+    client.stop();
+    snprintf_P(log_data, sizeof(log_data), "AIS: Rozłączono.");
+    AddLog(LOG_LEVEL_INFO);
+  } else {
+    // connection failure
+    snprintf_P(log_data, sizeof(log_data), "AIS: Problem z połączeniem!");
+    AddLog(LOG_LEVEL_INFO);
+    client.stop();
+ }
 }
-#endif  // MQTT_HOST_DISCOVERY
-#endif  // USE_DISCOVERY
+/*********************************************************************************************/
 
 /*********************************************************************************************\
  * MQTT driver specific code need to provide the following functions:
@@ -498,12 +514,7 @@ void MqttDisconnected(int state)
   Mqtt.retry_counter = Settings.mqtt_retry;
 
   MqttClient.disconnect();
-
-#if defined(USE_MQTT_TLS) && defined(USE_MQTT_AWS_IOT)
-  AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MQTT D_CONNECT_FAILED_TO " %s:%d, rc %d. " D_RETRY_IN " %d " D_UNIT_SECOND), AWS_endpoint, Settings.mqtt_port, state, Mqtt.retry_counter);
-#else
   AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MQTT D_CONNECT_FAILED_TO " %s:%d, rc %d. " D_RETRY_IN " %d " D_UNIT_SECOND), Settings.mqtt_host, Settings.mqtt_port, state, Mqtt.retry_counter);
-#endif
   rules_flag.mqtt_disconnected = 1;
 }
 
@@ -516,6 +527,7 @@ void MqttConnected(void)
     Mqtt.connected = true;
     Mqtt.retry_counter = 0;
     Mqtt.connect_count++;
+    Mqtt.ais_retry_counter = 0;
 
     GetTopic_P(stopic, TELE, mqtt_topic, S_LWT);
     Response_P(PSTR(D_ONLINE));
@@ -569,11 +581,14 @@ void MqttReconnect(void)
 
   Mqtt.allowed = Settings.flag.mqtt_enabled;
   if (Mqtt.allowed) {
-#ifdef USE_DISCOVERY
-#ifdef MQTT_HOST_DISCOVERY
-    MqttDiscoverServer();
-#endif  // MQTT_HOST_DISCOVERY
-#endif  // USE_DISCOVERY
+    // ask for gate ip only if the mqtt client starts with dom-
+    if(String(Settings.mqtt_client).indexOf("dom-") != -1) {
+      if (!Mqtt.ais_retry_counter){
+        MqttDiscoverServer();
+      } else {
+        AddLog_P2(LOG_LEVEL_DEBUG_MORE, PSTR("AIS: Ask AI-Speaker about IP in %d second"), Mqtt.ais_retry_counter);
+      }
+   }
     if (!strlen(Settings.mqtt_host) || !Settings.mqtt_port) {
       Mqtt.allowed = false;
     }
@@ -707,6 +722,7 @@ void MqttCheck(void)
 #endif  // USE_DISCOVERY
         MqttReconnect();
       } else {
+        Mqtt.ais_retry_counter--;
         Mqtt.retry_counter--;
       }
     } else {
