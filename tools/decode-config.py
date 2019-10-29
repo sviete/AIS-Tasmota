@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-VER = '2.3.0034'
+VER = '2.3.0036'
 
 """
-    decode-config.py - Backup/Restore Sonoff-Tasmota configuration data
+    decode-config.py - Backup/Restore Tasmota configuration data
 
     Copyright (C) 2019 Norbert Richter <nr@prsolution.eu>
 
@@ -29,7 +29,7 @@ Requirements:
 Instructions:
     Execute command with option -d to retrieve config data from a host
     or use -f to read a configuration file saved using Tasmota Web-UI
-    
+
     For further information read 'decode-config.md'
 
     For help execute command with argument -h (or -H for advanced help)
@@ -43,10 +43,10 @@ Usage: decode-config.py [-f <filename>] [-d <host>] [-P <port>]
                         [--cmnd-indent <indent>] [--cmnd-groups]
                         [--cmnd-nogroups] [--cmnd-sort] [--cmnd-unsort]
                         [-c <filename>] [-S] [-T json|cmnd|command]
-                        [-g {Control,Devices,Display,Domoticz,Internal,KNX,Light,MQTT,Management,Power,Rules,Sensor,Serial,SetOption,SonoffRF,System,Timer,Wifi} [{Control,Devices,Display,Domoticz,Internal,KNX,Light,MQTT,Management,Power,Rules,Sensor,Serial,SetOption,SonoffRF,System,Timer,Wifi} ...]]
+                        [-g {Control,Devices,Display,Domoticz,Internal,Knx,Light,Management,Mqtt,Power,Rules,Sensor,Serial,Setoption,Shutter,Sonoffrf,System,Timer,Wifi} [{Control,Devices,Display,Domoticz,Internal,Knx,Light,Management,Mqtt,Power,Rules,Sensor,Serial,Setoption,Shutter,Sonoffrf,System,Timer,Wifi} ...]]
                         [--ignore-warnings] [-h] [-H] [-v] [-V]
 
-    Backup/Restore Sonoff-Tasmota configuration data. Args that start with '--'
+    Backup/Restore Tasmota configuration data. Args that start with '--'
     (eg. -f) can also be set in a config file (specified via -c). Config file
     syntax allows: key=value, flag=true, stuff=[a,b,c] (for details, see syntax at
     https://goo.gl/R74nmi). If an arg is specified in more than one place, then
@@ -123,7 +123,7 @@ Usage: decode-config.py [-f <filename>] [-d <host>] [-P <port>]
                             (default do not output on backup or restore usage)
       -T, --output-format json|cmnd|command
                             display output format (default: 'json')
-      -g, --group {Control,Devices,Display,Domoticz,Internal,KNX,Light,MQTT,Management,Power,Rules,Sensor,Serial,SetOption,SonoffRF,System,Timer,Wifi}
+      -g, --group {Control,Devices,Display,Domoticz,Internal,Knx,Light,Management,Mqtt,Power,Rules,Sensor,Serial,Setoption,Shutter,Sonoffrf,System,Timer,Wifi}
                             limit data processing to command groups (default no
                             filter)
       --ignore-warnings     do not exit on warnings. Not recommended, used by your
@@ -263,7 +263,7 @@ exitcode = 0
 Settings dictionary describes the config file fields definition:
 
     <setting> = { <name> : <def> }
-    
+
     <name>: "string"
         a python valid dictionary key (string)
 
@@ -333,12 +333,12 @@ Settings dictionary describes the config file fields definition:
                         to convert value from JSON back to binary object
 
         Common definitions
-        
+
         <function>: <functionname> | <string> | None
             function to be called or string to evaluate:
             <functionname>:
                 A function name will be called with one or two parameter:
-                    The value to be processed 
+                    The value to be processed
                     (optional) the current array index (1,n)
             <string>
                 A string will be evaluate as is. The following
@@ -358,7 +358,7 @@ Settings dictionary describes the config file fields definition:
              numbers in the range -2147483648 through 2147483647
         <uint>:     unsigned integer
              numbers in the range 0 through 4294967295
-            
+
 """
 # ----------------------------------------------------------------------
 # Settings helper
@@ -370,16 +370,16 @@ def passwordwrite(value):
 def bitsRead(x, n=0, c=1):
     """
     Reads bit(s) of a number
-    
+
     @param x:
         the number from which to read
-    
+
     @param n:
         which bit position to read
-    
+
     @param c:
         how many bits to read (1 if omitted)
-    
+
     @return:
         the bit value(s)
     """
@@ -396,7 +396,7 @@ def bitsRead(x, n=0, c=1):
         x &= (1<<c)-1
     return x
 
-    
+
 def MqttFingerprint(value, idx=None):
     fingerprint = ""
     for i in value:
@@ -408,7 +408,7 @@ def WebSensor(value, idx):
     for i in range(0,32):
         cmd.append("WebSensor{} {}".format(i+(idx-1)*32, "1" if (int(value,16) & (1<<i))!=0 else "0"))
     return cmd
-    
+
 # ----------------------------------------------------------------------
 # Tasmota configuration data definition
 # ----------------------------------------------------------------------
@@ -832,6 +832,9 @@ Setting_6_4_1_7['flag3'][0].update ({
                                     })
 # ======================================================================
 Setting_6_4_1_8 = copy.deepcopy(Setting_6_4_1_7)
+Setting_6_4_1_8.update              ({
+    'my_gp':                        ('B',   0x484,       ([17], None,                           ('Management',  '"Gpio{} {}".format(#,$)')) ),
+                                    })
 Setting_6_4_1_8['flag3'][0].update ({
         'split_interlock':          ('<L', (0x3A0,1,13), (None, None,                           ('SetOption',   '"SetOption63 {}".format($)')) ),
                                     })
@@ -876,7 +879,7 @@ Setting_6_4_1_16.update             ({
             'pullup':               ('B',  (0x73C,1,1),  (None, None,                           ('Management',  None)) ),
                                     },      0x73C,       (None, None,                           ('Management',  None))
                                     ),
-                                    },      0x720,       (None, None,                           ('Management',  None)) 
+                                    },      0x720,       (None, None,                           ('Management',  None))
                                     ),
 })
 # ======================================================================
@@ -908,7 +911,12 @@ Setting_6_5_0_9['flag3'][0].update ({
         'no_power_feedback':        ('<L', (0x3A0,1,13), (None, None,                           ('SetOption',   '"SetOption63 {}".format($)')) ),
                                     })
 # ======================================================================
-Setting_6_5_0_11 = copy.deepcopy(Setting_6_5_0_9)
+Setting_6_5_0_10 = copy.deepcopy(Setting_6_5_0_9)
+Setting_6_5_0_10.update             ({
+    'my_adc0':                      ('B',   0x495,       (None, None,                           ('Sensor',      '"Adc {}".format($)')) ),
+                                    })
+# ======================================================================
+Setting_6_5_0_11 = copy.deepcopy(Setting_6_5_0_10)
 Setting_6_5_0_11['flag3'][0].update ({
         'use_underscore':           ('<L', (0x3A0,1,14), (None, None,                           ('SetOption',   '"SetOption64 {}".format($)')) ),
                                     })
@@ -985,6 +993,7 @@ Setting_6_6_0_9.update              ({
                                     })
 # ======================================================================
 Setting_6_6_0_10 = copy.deepcopy(Setting_6_6_0_9)
+Setting_6_6_0_10['flag3'][0].pop('tuya_disable_dimmer',None)
 Setting_6_6_0_10.update             ({
     'cfg_timestamp':                ('<L',  0xFF8,       (None, None,                           (INTERNAL,      None)) ),
     'cfg_crc32':                    ('<L',  0xFFC,       (None, None,                           (INTERNAL,      None)), '"0x{:08x}".format($)' ),
@@ -1015,7 +1024,69 @@ Setting_6_6_0_12['flag3'][0].update ({
         'energy_weekend':           ('<L', (0x3A0,1,20), (None, None,                           ('Power',       '"Tariff9 {}".format($)')) ),
                                     })
 # ======================================================================
+Setting_6_6_0_13 = copy.deepcopy(Setting_6_6_0_12)
+Setting_6_6_0_13['SensorBits1'][0].update ({
+        'hx711_json_weight_change': ('B',  (0x717,1, 6), (None, None,                           ('Sensor',      '"Sensor34 8 {}".format($)')) ),
+                                    })
+# ======================================================================
+Setting_6_6_0_14 = copy.deepcopy(Setting_6_6_0_13)
+Setting_6_6_0_14.pop('register8_ENERGY_TARIFF1_ST',None)
+Setting_6_6_0_14.pop('register8_ENERGY_TARIFF2_ST',None)
+Setting_6_6_0_14.pop('register8_ENERGY_TARIFF1_DS',None)
+Setting_6_6_0_14.pop('register8_ENERGY_TARIFF2_DS',None)
+Setting_6_6_0_14.update             ({
+    'register8':                    ('B',   0x1D6,       ([16], None,                           ('Power',       None)) ),
+    'tariff1_0':                    ('<H',  0xE30,       (None, None,                           ('Power',       '"Tariff1 {:02d}:{:02d},{:02d}:{:02d}".format(@["tariff1_0"]/60,@["tariff1_0"]%60,@["tariff1_1"]/60,@["tariff1_1"]%60)')) ),
+    'tariff1_1':                    ('<H',  0xE32,       (None, None,                           ('Power',       None)) ),
+    'tariff2_0':                    ('<H',  0xE34,       (None, None,                           ('Power',       '"Tariff2 {:02d}:{:02d},{:02d}:{:02d}".format(@["tariff2_0"]/60,@["tariff2_0"]%60,@["tariff2_1"]/60,@["tariff2_1"]%60)')) ),
+    'tariff2_1':                    ('<H',  0xE36,       (None, None,                           ('Power',       None)) ),
+    'mqttlog_level':                ('B',   0x1E7,       (None, None,                           ('Management', '"MqttLog {}".format($)')) ),
+    'pcf8574_config':               ('B',   0xE88,       ([8],  None,                           ('Devices',     None)) ),
+    'shutter_accuracy':             ('B',   0x1E6,       (None, None,                           ('Shutter',     None)) ),
+    'shutter_opentime':             ('<H',  0xE40,       ([4],  None,                           ('Shutter',     '"ShutterOpenDuration{} {:.1f}".format(#,$/10)')) ),
+    'shutter_closetime':            ('<H',  0xE48,       ([4],  None,                           ('Shutter',     '"ShutterCloseDuration{} {:.1f}".format(#,$/10)')) ),
+    'shuttercoeff':                 ('<H',  0xE50,       ([5,4],None,                           ('Shutter',     None)) ),
+    'shutter_invert':               ('B',   0xE78,       ([4],  None,                           ('Shutter',     '"ShutterInvert{} {}".format(#,$)')) ),
+    'shutter_set50percent':         ('B',   0xE7C,       ([4],  None,                           ('Shutter',     '"ShutterSetHalfway{} {}".format(#,$)')) ),
+    'shutter_position':             ('B',   0xE80,       ([4],  None,                           ('Shutter',     '"ShutterPosition{} {}".format(#,$)')) ),
+    'shutter_startrelay':           ('B',   0xE84,       ([4],  None,                           ('Shutter',     '"ShutterRelay{} {}".format(#,$)')) ),
+                                    })
+Setting_6_6_0_14['flag3'][0].update ({
+        'dds2382_model':            ('<L', (0x3A0,1,21), (None, None,                           ('SetOption',   '"SetOption71 {}".format($)')) ),
+        'shutter_mode':             ('<L', (0x3A0,1,30), (None, None,                           ('SetOption',   '"SetOption80 {}".format($)')) ),
+        'pcf8574_ports_inverted':   ('<L', (0x3A0,1,31), (None, None,                           ('SetOption',   '"SetOption81 {}".format($)')) ),
+                                    })
+# ======================================================================
+Setting_6_6_0_15 = copy.deepcopy(Setting_6_6_0_14)
+Setting_6_6_0_15['flag3'][0].update ({
+        'hardware_energy_total':    ('<L', (0x3A0,1,22), (None, None,                           ('SetOption',   '"SetOption72 {}".format($)')) ),
+                                    })
+# ======================================================================
+Setting_6_6_0_18 = copy.deepcopy(Setting_6_6_0_15)
+Setting_6_6_0_18['flag3'][0].pop('tuya_dimmer_range_255',None)
+Setting_6_6_0_18['flag3'][0].pop('tuya_dimmer_min_limit',None)
+Setting_6_6_0_18.pop('novasds_period',None)
+Setting_6_6_0_18.update             ({
+    'dimmer_hw_min':                ('<H',  0xE90,       (None, None,                           ('Light',       '"DimmerRange {},{}".format($,@["dimmer_hw_max"])')) ),
+    'dimmer_hw_max':                ('<H',  0xE92,       (None, None,                           ('Light',       None)) ),
+    'deepsleep':                    ('<H',  0xE94,       (None, '0 or 10 <= $ <= 86400',        ('Management',  '"DeepSleepTime {}".format($)')) ),
+    'novasds_startingoffset':       ('B',   0x73D,       (None, '1 <= $ <= 255',                ('Sensor',      '"Sensor20 {}".format($)')) ),
+                                    })
+# ======================================================================
+Setting_6_6_0_20 = copy.deepcopy(Setting_6_6_0_18)
+Setting_6_6_0_20['flag3'][0].update ({
+        'fast_power_cycle_disable': ('<L', (0x3A0,1,15), (None, None,                           ('SetOption',   '"SetOption65 {}".format($)')) ),
+                                    })
+Setting_6_6_0_20.update             ({
+    'energy_power_delta':           ('<H',  0xE98,       (None, '0 <= $ < 32000',               ('Power',       '"PowerDelta {}".format($)')) ),
+                                    })
+# ======================================================================
 Settings = [
+            (0x6060014,0x1000, Setting_6_6_0_20),
+            (0x6060012,0x1000, Setting_6_6_0_18),
+            (0x606000F,0x1000, Setting_6_6_0_15),
+            (0x606000E,0x1000, Setting_6_6_0_14),
+            (0x606000D,0x1000, Setting_6_6_0_13),
             (0x606000C,0x1000, Setting_6_6_0_12),
             (0x606000B,0x1000, Setting_6_6_0_11),
             (0x606000A,0x1000, Setting_6_6_0_10),
@@ -1030,7 +1101,7 @@ Settings = [
             (0x605000F, 0xe00, Setting_6_5_0_15),
             (0x605000C, 0xe00, Setting_6_5_0_12),
             (0x605000B, 0xe00, Setting_6_5_0_11),
-            (0x605000B, 0xe00, Setting_6_5_0_11),
+            (0x605000A, 0xe00, Setting_6_5_0_10),
             (0x6050009, 0xe00, Setting_6_5_0_9),
             (0x6050007, 0xe00, Setting_6_5_0_7),
             (0x6050006, 0xe00, Setting_6_5_0_6),
@@ -1252,7 +1323,7 @@ def GetTemplateSetting(decode_cfg):
 def GetGroupList(setting):
     """
     Get all avilable group definition from setting
-    
+
     @return:
         configargparse.parse_args() result
     """
@@ -1272,7 +1343,7 @@ def GetGroupList(setting):
     groups=list(groups)
     groups.sort()
     return groups
-    
+
 
 class FileType:
     FILE_NOT_FOUND = None
@@ -1467,7 +1538,7 @@ def MakeUrl(host, port=80, location=''):
 def LoadTasmotaConfig(filename):
     """
     Load config from Tasmota file
-    
+
     @param filename:
         filename to load
 
@@ -1540,7 +1611,7 @@ def TasmotaGet(cmnd, host, port, username=DEFAULTS['source']['username'], passwo
         body = buffer.getvalue()
     except:
         pass
-    
+
     return responsecode, body
 
 
@@ -1750,7 +1821,7 @@ def GetSettingsCrc32(dobj):
 
 
 def GetFieldDef(fielddef, fields="format_, addrdef, baseaddr, bits, bitshift, datadef, arraydef, validate, cmd, group, tasmotacmnd, converter, readconverter, writeconverter"):
-    
+
     """
     Get field definition items
 
@@ -1868,7 +1939,7 @@ def GetFieldDef(fielddef, fields="format_, addrdef, baseaddr, bits, bitshift, da
         else:
             print >> sys.stderr, 'wrong <converter> {} length ({}) in <fielddef> {}'.format(converter, len(converter), fielddef)
             raise SyntaxError('<fielddef> error')
-    
+
 
     return eval(fields)
 
@@ -1943,13 +2014,13 @@ def CmndConverter(valuemapping, value, idx, fielddef):
             else:
                 evalstr = tasmotacmnd.replace('$','value').replace('@','valuemapping')
             result = eval(evalstr)
-                
+
         elif callable(tasmotacmnd):      # use as format function
             if idx is not None:
                 result = tasmotacmnd(value, idx)
             else:
                 result = tasmotacmnd(value)
-    
+
     return result
 
 
@@ -1966,7 +2037,7 @@ def ValidateValue(value, fielddef):
         True if value is valid, False if invalid
     """
     validate = GetFieldDef(fielddef, fields='validate')
-    
+
     if value == 0:
         # can not complete all validate condition
         # some Tasmota values are not allowed to be 0 on input
@@ -2063,7 +2134,7 @@ def GetFieldMinMax(fielddef):
         max_ = GetFormatCount(format_)
 
     return min_,max_
-    
+
 
 def GetFieldLength(fielddef):
     """
@@ -2162,7 +2233,7 @@ def IsFilterGroup(group):
         if group is None:
             return False
         if group == '*':
-            return False
+            return True
         if group.title() != INTERNAL.title() and group.title() not in (groupname.title() for groupname in args.filter):
             return False
     return True
@@ -2184,7 +2255,7 @@ def GetFieldValue(fielddef, dobj, addr):
     """
 
     format_, bits, bitshift = GetFieldDef(fielddef, fields='format_, bits, bitshift')
-    
+
     value_  = 0
     unpackedvalue = struct.unpack_from(format_, dobj, addr)
     singletype, bitsize = GetFormatType(format_)
@@ -2221,7 +2292,7 @@ def SetFieldValue(fielddef, dobj, addr, value):
 
     format_, bits, bitshift = GetFieldDef(fielddef, fields='format_, bits, bitshift')
     formatcnt = GetFormatCount(format_)
-    singletype, bitsize = GetFormatType(format_)    
+    singletype, bitsize = GetFormatType(format_)
     if args.debug >= 2:
         print >> sys.stderr, "SetFieldValue(): fielddef {}, addr 0x{:04x}  value {}  formatcnt {}  singletype {}  bitsize {}  ".format(fielddef,addr,value,formatcnt,singletype,bitsize)
     if not format_[-1:].lower() in ['s','p']:
@@ -2238,10 +2309,10 @@ def SetFieldValue(fielddef, dobj, addr, value):
             try:
                 struct.pack_into(singletype, dobj, addr, val)
             except struct.error as e:
-                exit(ExitCode.RESTORE_DATA_ERROR, 
-                     "Single type {} [fielddef={}, addr=0x{:04x}, value={}] - skipped!".format(e,fielddef,addr,val), 
-                     type_=LogType.WARNING, 
-                     doexit=not args.ignorewarning, 
+                exit(ExitCode.RESTORE_DATA_ERROR,
+                     "Single type {} [fielddef={}, addr=0x{:04x}, value={}] - skipped!".format(e,fielddef,addr,val),
+                     type_=LogType.WARNING,
+                     doexit=not args.ignorewarning,
                      line=inspect.getlineno(inspect.currentframe()))
             value >>= bitsize
     else:
@@ -2250,10 +2321,10 @@ def SetFieldValue(fielddef, dobj, addr, value):
         try:
             struct.pack_into(format_, dobj, addr, value)
         except struct.error as e:
-            exit(ExitCode.RESTORE_DATA_ERROR, 
-                 "String type {} [fielddef={}, addr=0x{:04x}, value={}} - skipped!".format(e,fielddef,addr,value), 
-                 type_=LogType.WARNING, 
-                 doexit=not args.ignorewarning, 
+            exit(ExitCode.RESTORE_DATA_ERROR,
+                 "String type {} [fielddef={}, addr=0x{:04x}, value={}} - skipped!".format(e,fielddef,addr,value),
+                 type_=LogType.WARNING,
+                 doexit=not args.ignorewarning,
                  line=inspect.getlineno(inspect.currentframe()))
 
     return dobj
@@ -2301,7 +2372,7 @@ def GetField(dobj, fieldname, fielddef, raw=False, addroffset=0):
                 value = GetField(dobj, fieldname, subfielddef, raw=raw, addroffset=addroffset+offset)
                 valuemapping.append(value)
             offset += length
-        
+
     # <format> contains a dict
     elif isinstance(format_, dict):
         mapping_value = {}
@@ -2496,7 +2567,7 @@ def SetField(dobj, fieldname, fielddef, restore, addroffset=0, filename=""):
                     curvalue = GetFieldValue(fielddef, dobj, baseaddr+addroffset)
                     if prevvalue != curvalue and args.verbose:
                         message("Value for '{}' changed from {} to {}".format(fieldname, prevvalue, curvalue), type_=LogType.INFO)
-                else: 
+                else:
                     if args.debug >= 2:
                         print >> sys.stderr, "SetField(): Special field '{}' using '{}'/{}{} @{} skipped".format(fieldname, format_, arraydef, bits, hex(baseaddr+addroffset))
         else:
@@ -2668,7 +2739,7 @@ def Bin2Mapping(decode_cfg):
     if 'cfg_crc' in setting:
         valuemapping['header']['template'].update({'size': cfg_size})
     if 'cfg_crc32' in setting:
-        valuemapping['header']['template'].update({'crc32': cfg_crc32})
+        valuemapping['header']['template'].update({'crc32': hex(cfg_crc32)})
         valuemapping['header']['data'].update({'crc32': hex(GetSettingsCrc32(decode_cfg))})
     if 'version' in setting:
         valuemapping['header']['data'].update({'version': hex(cfg_version)})
@@ -2686,14 +2757,14 @@ def Mapping2Bin(decode_cfg, jsonconfig, filename=""):
         restore data mapping
     @param filename:
         name of the restore file (for error output only)
-        
+
     @return:
         changed binary config data (decrypted) or None on error
     """
     if isinstance(decode_cfg, str):
         decode_cfg = bytearray(decode_cfg)
 
-    
+
     # get binary header data to use the correct version template from device
     version, size, setting = GetTemplateSetting(decode_cfg)
 
@@ -2736,13 +2807,13 @@ def Mapping2Cmnd(decode_cfg, valuemapping, filename=""):
         data mapping
     @param filename:
         name of the restore file (for error output only)
-        
+
     @return:
         Tasmota command mapping {group: [cmnd <,cmnd <,...>>]}
     """
     if isinstance(decode_cfg, str):
         decode_cfg = bytearray(decode_cfg)
-    
+
     # get binary header data to use the correct version template from device
     version, size, setting = GetTemplateSetting(decode_cfg)
 
@@ -2913,7 +2984,7 @@ def Restore(restorefile, backupfileformat, encode_cfg, decode_cfg, configmapping
             version, size, setting = GetTemplateSetting(new_decode_cfg)
             # get config file version
             cfg_version = GetField(new_decode_cfg, 'version', setting['version'], raw=True)
-            message("Config file contains data of Sonoff-Tasmota {}".format(GetVersionStr(cfg_version)), type_=LogType.INFO)
+            message("Config file contains data of Tasmota {}".format(GetVersionStr(cfg_version)), type_=LogType.INFO)
         if args.forcerestore or new_encode_cfg != encode_cfg:
             # write config direct to device via http
             if args.device is not None:
@@ -2969,7 +3040,7 @@ def OutputTasmotaCmnds(tasmotacmnds):
                 print
                 print "# {}:".format(group)
                 OutputTasmotaSubCmnds(cmnds)
-                    
+
     else:
         cmnds = []
         for group in groups:
@@ -2980,12 +3051,12 @@ def OutputTasmotaCmnds(tasmotacmnds):
 def ParseArgs():
     """
     Program argument parser
-    
+
     @return:
         configargparse.parse_args() result
     """
     global parser
-    parser = configargparse.ArgumentParser(description='Backup/Restore Sonoff-Tasmota configuration data.',
+    parser = configargparse.ArgumentParser(description='Backup/Restore Tasmota configuration data.',
                                            epilog='Either argument -d <host> or -f <filename> must be given.',
                                            add_help=False,
                                            formatter_class=lambda prog: CustomHelpFormatter(prog))
@@ -3222,7 +3293,7 @@ if __name__ == "__main__":
     # decode into mappings dictionary
     configmapping = Bin2Mapping(decode_cfg)
     if args.verbose and 'version' in configmapping:
-        message("{} '{}' is using Sonoff-Tasmota {}".format('File' if args.tasmotafile is not None else 'Device',
+        message("{} '{}' is using Tasmota {}".format('File' if args.tasmotafile is not None else 'Device',
                                                      args.tasmotafile if args.tasmotafile is not None else args.device,
                                                      GetVersionStr(configmapping['version'])),
                                                      type_=LogType.INFO)
@@ -3243,5 +3314,5 @@ if __name__ == "__main__":
         if args.outputformat == 'cmnd' or args.outputformat == 'command':
             tasmotacmnds = Mapping2Cmnd(decode_cfg, configmapping)
             OutputTasmotaCmnds(tasmotacmnds)
-            
+
     sys.exit(exitcode)
