@@ -142,7 +142,7 @@ const char HASS_DISCOVER_DEVICE_INFO[] PROGMEM =
   "\"name\":\"%s\","
   "\"model\":\"%s\","
   "\"sw_version\":\"%s%s\","
-  "\"manufacturer\":\"Tasmota\"}";
+  "\"manufacturer\":\"AI-Speaker\"}";
 
 const char HASS_DISCOVER_DEVICE_INFO_SHORT[] PROGMEM =
   ",\"uniq_id\":\"%s\","

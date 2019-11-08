@@ -50,7 +50,7 @@
 #define PROJECT                "ais-dom"          // PROJECT is used as the default topic delimiter
 
 // If not selected the default will be SONOFF_BASIC
-#define MODULE                 SONOFF_S2X     // [Module] Select default model from sonoff_template.h
+#define MODULE                 SONOFF_S2X     // SONOFF_S2X  // SONOFF_BRIDGE // SONOFF_T11  // [Module] Select default model from sonoff_template.h
 
 #define SAVE_DATA              1                 // [SaveData] Save changed parameters to Flash (0 = disable, 1 - 3600 seconds)
 #define SAVE_STATE             1                 // [SetOption0] Save changed power state to Flash (0 = disable, 1 = enable)
