@@ -475,7 +475,7 @@ const char HTTP_COUNTER[] PROGMEM =
   "<br><div id='t' style='text-align:center;'></div>";
 
 const char HTTP_END[] PROGMEM =
-  "<div style='text-align:right;font-size:11px;'><hr/><a href='https://ai-speaker.com' target='_blank' style='color:#aaa;'>AIS dom, na bazie Tasmota %s " D_BY " Theo Arends</a></div>"
+  "<div style='text-align:right;font-size:11px;'><hr/><a href='https://www.ai-speaker.com' target='_blank' style='color:#aaa;'>AIS dom, na bazie Tasmota %s " D_BY " Theo Arends</a></div>"
   "</div>"
   "</body>"
   "</html>";
