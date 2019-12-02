@@ -724,11 +724,7 @@ void MqttCheck(void)
     if (!MqttIsConnected()) {
       global_state.mqtt_down = 1;
       if (!Mqtt.retry_counter) {
-#ifdef USE_DISCOVERY
-#ifdef MQTT_HOST_DISCOVERY
         if (!strlen(Settings.mqtt_host) && !Wifi.mdns_begun) { return; }
-#endif  // MQTT_HOST_DISCOVERY
-#endif  // USE_DISCOVERY
         MqttReconnect();
       } else {
         Mqtt.ais_retry_counter--;

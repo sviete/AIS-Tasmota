@@ -50,7 +50,7 @@
 #define PROJECT                "ais-dom"          // PROJECT is used as the default topic delimiter
 
 // If not selected the default will be SONOFF_BASIC
-#define MODULE                 SONOFF_SV     // SONOFF_S2X  // SONOFF_BRIDGE // SONOFF_T11  // SONOFF_SV [Module] Select default model from tasmota_template.h
+#define MODULE                 SONOFF_TH     // SONOFF_S2X  // SONOFF_BRIDGE // SONOFF_T11  // SONOFF_SV // SONOFF_TH [Module] Select default model from tasmota_template.h
 
 #define SAVE_DATA              1                 // [SaveData] Save changed parameters to Flash (0 = disable, 1 - 3600 seconds)
 #define SAVE_STATE             1                 // [SetOption0] Save changed power state to Flash (0 = disable, 1 = enable)
@@ -300,9 +300,9 @@
   #define USE_EMULATION_WEMO                     // Enable Belkin WeMo emulation for Alexa (+6k code, +2k mem common)
 
 // -- mDNS ----------------------------------------
-#define USE_DISCOVERY                            // Enable mDNS for the following services (+8k code or +23.5k code with core 2_5_x, +0.3k mem)
-  #define WEBSERVER_ADVERTISE                    // Provide access to webserver by name <Hostname>.local/
-  #define MQTT_HOST_DISCOVERY                    // Find MQTT host server (overrides MQTT_HOST if found)
+//#define USE_DISCOVERY                            // Enable mDNS for the following services (+8k code or +23.5k code with core 2_5_x, +0.3k mem)
+//  #define WEBSERVER_ADVERTISE                    // Provide access to webserver by name <Hostname>.local/
+//  #define MQTT_HOST_DISCOVERY                    // Find MQTT host server (overrides MQTT_HOST if found)
 
 // -- Time ----------------------------------------
 #define USE_TIMERS                               // Add support for up to 16 timers (+2k2 code)
