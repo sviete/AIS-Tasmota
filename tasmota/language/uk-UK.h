@@ -71,6 +71,7 @@
 #define D_COLDLIGHT "Холодний"
 #define D_COMMAND "Команда"
 #define D_CONNECTED "Під'єднано"
+#define D_CORS_DOMAIN "CORS Domain"
 #define D_COUNT "Розмір"
 #define D_COUNTER "Лічильник"
 #define D_CURRENT "Струм"           // As in Voltage and Current
@@ -112,6 +113,7 @@
 #define D_LIGHT "Світло"
 #define D_LWT "LWT"
 #define D_MODULE "Модуль"
+#define D_MOISTURE "Moisture"
 #define D_MQTT "MQTT"
 #define D_MULTI_PRESS "Багаторазове натискання"
 #define D_NOISE "Шум"
@@ -352,6 +354,7 @@
 #define D_UPLOAD_ERR_11 "Помилка стирання чипу RF"
 #define D_UPLOAD_ERR_12 "Помилка запису чипу RF"
 #define D_UPLOAD_ERR_13 "Помилка розкодування прошивки RF"
+#define D_UPLOAD_ERR_14 "Not compatible"
 #define D_UPLOAD_ERROR_CODE "Код помилки завантаження"
 
 #define D_ENTER_COMMAND "Уведіть команду"
@@ -628,6 +631,8 @@
 #define D_SENSOR_SLAVE_TX    "Slave TX"
 #define D_SENSOR_SLAVE_RX    "Slave RX"
 #define D_SENSOR_SLAVE_RESET "Slave RST"
+#define D_SENSOR_GPS_RX        "GPS RX"
+#define D_SENSOR_GPS_TX        "GPS TX"
 
 // Units
 #define D_UNIT_AMPERE "А"

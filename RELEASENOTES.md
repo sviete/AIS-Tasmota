@@ -2,8 +2,6 @@
 
 # RELEASE NOTES
 
-### Sonoff-Tasmota is now Tasmota
-
 ## Migration Information
 
 See [migration path](https://tasmota.github.io/docs/#/Upgrading?id=migration-path) for instructions how to migrate to a major version. Pay attention to the following version breaks due to dynamic settings updates:
@@ -13,6 +11,13 @@ See [migration path](https://tasmota.github.io/docs/#/Upgrading?id=migration-pat
 3. Migrate to **Sonoff-Tasmota 5.14**
 4. Migrate to **Sonoff-Tasmota 6.x**
 5. Migrate to **Tasmota 7.x**
+
+--- Major change in parameter storage layout ---
+
+6. Migrate to **Tasmota 8.1**
+7. Migrate to **Tasmota 8.x**
+
+While fallback or downgrading is common practice it was never supported due to Settings additions or changes in newer releases. Starting with release **v8.1.0 Doris** the Settings are re-allocated in such a way that fallback is only allowed and possible to release **v7.2.0 Constance**. Once at v7.2.0 you're on your own when downgrading even further.
 
 ## Supported Core versions
 
@@ -34,7 +39,7 @@ The following binary downloads have been compiled with ESP8266/Arduino library c
 
 - **tasmota.bin** = The Tasmota version with sensors. **RECOMMENDED RELEASE BINARY**
 - **tasmota-BG.bin** to **tasmota-TW.bin** = The Tasmota version in different languages.
-- **tasmota-basic.bin** = The Basic version without most sensors.
+- **tasmota-lite.bin** = The Lite version without most sensors.
 - **tasmota-knx.bin** = The Knx version without some features but adds KNX support.
 - **tasmota-sensors.bin** = The Sensors version adds more useful sensors.
 - **tasmota-ir** = The InfraRed Receiver and transmitter version allowing all available protocols provided by library IRremoteESP8266 but without most other features.
@@ -47,10 +52,16 @@ The following binary downloads have been compiled with ESP8266/Arduino library c
 
 ## Changelog
 
-### Version 7.1.2 Betty
+### Version 8.1.0 Doris
 
-- Fix lost functionality of GPIO9 and GPIO10 on some devices (#7080)
-- Fix Zigbee uses Hardware Serial if GPIO 1/3 or GPIO 13/15 and SerialLog 0 (#7071)
-- Fix WS2812 power control (#7090)
-- Change light color schemes 2, 3 and 4 from color wheel to Hue driven with user Saturation control
-- Change log buffer size from 520 to 700 characters accomodating full rule text (#7110)
+- Change Settings text handling allowing variable length text within a total text pool of 699 characters
+- Change Smoother ``Fade`` using 100Hz instead of 20Hz animation (#7179)
+- Change number of rule ``Var``s and ``Mem``s from 5 to 16 (#4933)
+- Change number of ``FriendlyName``s from 4 to 8
+- Add commands ``WebButton1`` until ``WebButton16`` to support user defined GUI button text (#7166)
+- Add support for max 150 characters in most command parameter strings (#3686, #4754)
+- Add support for GPS as NTP server by Christian Baars and Adrian Scillato
+- Add support for ``AdcParam`` parameters to control ADC0 Moisture formula by Federico Leoni (#7309)
+- Add Zigbee coalesce sensor attributes into a single message
+- Add Zigbee better support for Xiaomi Double Switch and Xiaomi Vibration sensor
+- Add Deepsleep start delay based on Teleperiod if ``Teleperiod`` differs from 10 or 300

@@ -71,6 +71,7 @@
 #define D_COLDLIGHT "Fría"
 #define D_COMMAND "Comando"
 #define D_CONNECTED "Conectado"
+#define D_CORS_DOMAIN "CORS Domain"
 #define D_COUNT "Conteo"
 #define D_COUNTER "Contador"
 #define D_CURRENT "Corriente"          // As in Voltage and Current
@@ -112,6 +113,7 @@
 #define D_LIGHT "Luz"
 #define D_LWT "LWT"
 #define D_MODULE "Módulo"
+#define D_MOISTURE "Moisture"
 #define D_MQTT "MQTT"
 #define D_MULTI_PRESS "multi-press"
 #define D_NOISE "Ruido"
@@ -352,6 +354,7 @@
 #define D_UPLOAD_ERR_11 "No se pudo borrar en el chip RF"
 #define D_UPLOAD_ERR_12 "No se puedo escribir en el chip RF"
 #define D_UPLOAD_ERR_13 "No se pudo decodificar firmware RF"
+#define D_UPLOAD_ERR_14 "Not compatible"
 #define D_UPLOAD_ERROR_CODE "Código de error de carga"
 
 #define D_ENTER_COMMAND "Ingresar comando"
@@ -625,9 +628,11 @@
 #define D_SENSOR_SM2135_DAT    "SM2135 Dat"
 #define D_SENSOR_DEEPSLEEP     "DeepSleep"
 #define D_SENSOR_EXS_ENABLE    "EXS Enable"
-#define D_SENSOR_SLAVE_TX    "Slave TX"
-#define D_SENSOR_SLAVE_RX    "Slave RX"
-#define D_SENSOR_SLAVE_RESET "Slave RST"
+#define D_SENSOR_SLAVE_TX      "Slave TX"
+#define D_SENSOR_SLAVE_RX      "Slave RX"
+#define D_SENSOR_SLAVE_RESET   "Slave RST"
+#define D_SENSOR_GPS_RX        "GPS RX"
+#define D_SENSOR_GPS_TX        "GPS TX"
 
 // Units
 #define D_UNIT_AMPERE "A"

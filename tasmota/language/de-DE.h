@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v6.6.0.21
+ * Updated until v8.0.0
 \*********************************************************************/
 
 //#define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -71,6 +71,7 @@
 #define D_COLDLIGHT "kalt"
 #define D_COMMAND "Befehl"
 #define D_CONNECTED "verbunden"
+#define D_CORS_DOMAIN "CORS Domain"
 #define D_COUNT "zählen"
 #define D_COUNTER "Zähler"
 #define D_CURRENT "Strom"          // As in Voltage and Current
@@ -112,6 +113,7 @@
 #define D_LIGHT "Licht"
 #define D_LWT "LWT"
 #define D_MODULE "Modul"
+#define D_MOISTURE "Moisture"
 #define D_MQTT "MQTT"
 #define D_MULTI_PRESS "Mehrfachdruck"
 #define D_NOISE "Lautstärke"
@@ -352,6 +354,7 @@
 #define D_UPLOAD_ERR_11 "RF Chip löschen fehlgeschlagen"
 #define D_UPLOAD_ERR_12 "RF Chip beschreiben fehlgeschlagen"
 #define D_UPLOAD_ERR_13 "RF Firmware ungültig"
+#define D_UPLOAD_ERR_14 "Nicht kompatibel"
 #define D_UPLOAD_ERROR_CODE "Upload Fehler Nummer"
 
 #define D_ENTER_COMMAND "Befehl eingeben"
@@ -628,6 +631,8 @@
 #define D_SENSOR_SLAVE_TX    "Slave TX"
 #define D_SENSOR_SLAVE_RX    "Slave RX"
 #define D_SENSOR_SLAVE_RESET "Slave RST"
+#define D_SENSOR_GPS_RX        "GPS RX"
+#define D_SENSOR_GPS_TX        "GPS TX"
 
 // Units
 #define D_UNIT_AMPERE "A"
