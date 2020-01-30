@@ -129,12 +129,12 @@ void MqttDiscoverServer(void)
 {
   Mqtt.ais_retry_counter = 180;
   AddLog_P2(LOG_LEVEL_INFO, "AIS: MQTT Host: %s", SettingsText(SET_MQTT_HOST));
-  AddLog_P2(LOG_LEVEL_INFO, "AIS: Wykrywam MQTT Host dla bramki: %s", SettingsText(SET_MQTT_USER));
+  AddLog_P2(LOG_LEVEL_INFO, "AIS: Wykrywam MQTT Host dla bramki: %s", mqtt_client);
   WiFiClient client;
   const char* host = "powiedz.co";
   const uint16_t port = 80;
   if (client.connect(host, port)){
-    client.print(String("GET /gate_ip_info?id=") + String(SettingsText(SET_MQTT_USER)) + " HTTP/1.1\r\n" +
+    client.print(String("GET /gate_ip_info?id=") + String(mqtt_client) + " HTTP/1.1\r\n" +
              "Host: " + host + "\r\n" +
              "Connection: close\r\n" +
              "\r\n"
@@ -580,8 +580,8 @@ void MqttReconnect(void)
 
   Mqtt.allowed = Settings.flag.mqtt_enabled;  // SetOption3 - Enable MQTT
   if (Mqtt.allowed) {
-    // ask for gate ip only if the mqtt user starts with dom-
-    if(String(SettingsText(SET_MQTT_USER)).indexOf("dom-") != -1) {
+    // ask for gate ip only if the mqtt client starts with dom-
+    if(String(mqtt_client).indexOf("dom-") != -1) {
       if (!Mqtt.ais_retry_counter){
         MqttDiscoverServer();
       } else {
