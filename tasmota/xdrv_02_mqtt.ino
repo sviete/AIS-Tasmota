@@ -128,13 +128,13 @@ void MakeValidMqtt(uint32_t option, char* str)
 void MqttDiscoverServer(void)
 {
   Mqtt.ais_retry_counter = 180;
-  snprintf_P(log_data, sizeof(log_data), "AIS: AI-Speaker MQTT Client: %s", SettingsText(SET_MQTT_HOST));
-  AddLog(LOG_LEVEL_INFO);
+  AddLog_P2(LOG_LEVEL_INFO, "AIS: MQTT Host: %s", SettingsText(SET_MQTT_HOST));
+  AddLog_P2(LOG_LEVEL_INFO, "AIS: Wykrywam MQTT Host dla bramki: %s", SettingsText(SET_MQTT_USER));
   WiFiClient client;
   const char* host = "powiedz.co";
   const uint16_t port = 80;
   if (client.connect(host, port)){
-    client.print(String("GET /gate_ip_info?id=") + String(SettingsText(SET_MQTT_HOST)) + " HTTP/1.1\r\n" +
+    client.print(String("GET /gate_ip_info?id=") + String(SettingsText(SET_MQTT_USER)) + " HTTP/1.1\r\n" +
              "Host: " + host + "\r\n" +
              "Connection: close\r\n" +
              "\r\n"
@@ -145,9 +145,13 @@ void MqttDiscoverServer(void)
         int s = line.indexOf("###ais###");
         int e = line.indexOf("###dom###");
         if ((s > -1) && (e > 0)){
-          // Save IP from AI-Speaker
-          SettingsUpdateText(SET_MQTT_HOST, line.substring(s+9, e).c_str());
-          AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS D_MQTT_SERVICE_FOUND " %s, " D_IP_ADDRESS " %s, " D_PORT " %d"), line.substring(s+9, e).c_str(), SettingsText(SET_MQTT_HOST), Settings.mqtt_port);
+          // Save IP from AI-Speaker only if the IP is diferend then ais-dom
+          if (String(line.substring(s+9, e).c_str()) != "ais-dom") {
+            SettingsUpdateText(SET_MQTT_HOST, line.substring(s+9, e).c_str());
+            AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS D_MQTT_SERVICE_FOUND " %s, " D_IP_ADDRESS " %s, " D_PORT " %d"), line.substring(s+9, e).c_str(), SettingsText(SET_MQTT_HOST), Settings.mqtt_port);
+          } else {
+            AddLog_P2(LOG_LEVEL_INFO, "AIS: MQTT Host dla bramki %s NIE wykryty %s, obecny MQTT host %s.", SettingsText(SET_MQTT_USER), line.substring(s+9, e).c_str(), SettingsText(SET_MQTT_HOST));
+          }
         } else {
           snprintf_P(log_data, sizeof(log_data), line.c_str());
           AddLog(LOG_LEVEL_DEBUG_MORE);
@@ -576,8 +580,8 @@ void MqttReconnect(void)
 
   Mqtt.allowed = Settings.flag.mqtt_enabled;  // SetOption3 - Enable MQTT
   if (Mqtt.allowed) {
-    // ask for gate ip only if the mqtt client starts with dom-
-    if(String(SettingsText(SET_MQTT_CLIENT)).indexOf("dom-") != -1) {
+    // ask for gate ip only if the mqtt user starts with dom-
+    if(String(SettingsText(SET_MQTT_USER)).indexOf("dom-") != -1) {
       if (!Mqtt.ais_retry_counter){
         MqttDiscoverServer();
       } else {
