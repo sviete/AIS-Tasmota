@@ -379,7 +379,9 @@ void RtcSecond(void)
       Rtc.ntp_sync_minute = 1;                   // If sync prepare for a new cycle
     }
     uint8_t offset = (uptime < 30) ? RtcTime.second : (((ESP.getChipId() & 0xF) * 3) + 3) ;  // First try ASAP to sync. If fails try once every 60 seconds based on chip id
-    if ( (((offset == RtcTime.second) && ( (RtcTime.year < 2016) || (Rtc.ntp_sync_minute == uptime_minute))) || ntp_force_sync ) ) {
+    if ( (((offset == RtcTime.second) && ( (RtcTime.year < 2016) ||                          // Never synced
+                                           (Rtc.ntp_sync_minute == uptime_minute))) ||       // Re-sync every hour
+                                            ntp_force_sync ) ) {                             // Forced sync
       Rtc.ntp_time = sntp_get_current_timestamp();
       if (Rtc.ntp_time > START_VALID_TIME) {  // Fix NTP bug in core 2.4.1/SDK 2.2.1 (returns Thu Jan 01 08:00:10 1970 after power on)
         ntp_force_sync = false;
@@ -458,7 +460,9 @@ void RtcSetTime(uint32_t epoch)
   if (epoch < START_VALID_TIME) {  // 2016-01-01
     Rtc.user_time_entry = false;
     ntp_force_sync = true;
+    sntp_init();
   } else {
+    sntp_stop();
     Rtc.user_time_entry = true;
     Rtc.utc_time = epoch -1;    // Will be corrected by RtcSecond
   }
@@ -467,9 +471,9 @@ void RtcSetTime(uint32_t epoch)
 
 void RtcInit(void)
 {
-  sntp_setservername(0, Settings.ntp_server[0]);
-  sntp_setservername(1, Settings.ntp_server[1]);
-  sntp_setservername(2, Settings.ntp_server[2]);
+  sntp_setservername(0, SettingsText(SET_NTPSERVER1));
+  sntp_setservername(1, SettingsText(SET_NTPSERVER2));
+  sntp_setservername(2, SettingsText(SET_NTPSERVER3));
   sntp_stop();
   sntp_set_timezone(0);      // UTC time
   sntp_init();

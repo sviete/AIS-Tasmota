@@ -71,6 +71,7 @@
 #define D_COLDLIGHT "Studené světlo"
 #define D_COMMAND "Příkaz"
 #define D_CONNECTED "...připojeno"
+#define D_CORS_DOMAIN "CORS Domain"
 #define D_COUNT "Počítej"
 #define D_COUNTER "Počítadlo"
 #define D_CURRENT "Proud"          // As in Voltage and Current
@@ -112,6 +113,7 @@
 #define D_LIGHT "Světlo"
 #define D_LWT "LWT"
 #define D_MODULE "Modul"
+#define D_MOISTURE "Moisture"
 #define D_MQTT "MQTT"
 #define D_MULTI_PRESS "několikeré-stisknutí"
 #define D_NOISE "Hluk"
@@ -352,6 +354,7 @@
 #define D_UPLOAD_ERR_11 "Chyba smazání RF chipu"
 #define D_UPLOAD_ERR_12 "Chyba při zápisu do RF chipu"
 #define D_UPLOAD_ERR_13 "Chyba dekódování RF firmwaru"
+#define D_UPLOAD_ERR_14 "Not compatible"
 #define D_UPLOAD_ERROR_CODE "Chyba nahrávání"
 
 #define D_ENTER_COMMAND "Vlož příkaz"
@@ -628,6 +631,8 @@
 #define D_SENSOR_SLAVE_TX    "Slave TX"
 #define D_SENSOR_SLAVE_RX    "Slave RX"
 #define D_SENSOR_SLAVE_RESET "Slave RST"
+#define D_SENSOR_GPS_RX        "GPS RX"
+#define D_SENSOR_GPS_TX        "GPS TX"
 
 // Units
 #define D_UNIT_AMPERE "A"
