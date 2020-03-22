@@ -50,7 +50,7 @@
 #define PROJECT                "ais-dom"          // PROJECT is used as the default topic delimiter
 
 // If not selected the default will be SONOFF_BASIC
-#define MODULE                 SONOFF_TH     // SONOFF_S2X  // SONOFF_BRIDGE // SONOFF_T11  // SONOFF_SV // SONOFF_TH [Module] Select default model from tasmota_template.h
+#define MODULE                 SONOFF_BASIC     // SONOFF_S2X  // SONOFF_BRIDGE // SONOFF_T11  // SONOFF_SV // SONOFF_TH [Module] Select default model from tasmota_template.h
 
 #define SAVE_DATA              1                 // [SaveData] Save changed parameters to Flash (0 = disable, 1 - 3600 seconds)
 #define SAVE_STATE             true              // [SetOption0] Save changed power state to Flash (false = disable, true = enable)
@@ -602,7 +602,7 @@
     #define IR_RCV_MIN_UNKNOWN_SIZE 6            // Set the smallest sized "UNKNOWN" message packets we actually care about (default 6, max 255)
 
 // -- Zigbee interface ----------------------------
-//#define USE_ZIGBEE                                // Enable serial communication with Zigbee CC2530 flashed with ZNP (+49k code, +3k mem)
+  //#define USE_ZIGBEE                                // Enable serial communication with Zigbee CC2530 flashed with ZNP (+49k code, +3k mem)
   #define USE_ZIGBEE_PANID  0x1A63                // arbitrary PAN ID for Zigbee network, must be unique in the home
   #define USE_ZIGBEE_EXTPANID 0xCCCCCCCCCCCCCCCCL // arbitrary extended PAN ID
   #define USE_ZIGBEE_CHANNEL  11                  // Zigbee Channel (11-26)
