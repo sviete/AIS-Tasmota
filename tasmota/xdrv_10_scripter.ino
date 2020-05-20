@@ -641,13 +641,14 @@ char *script;
 
 #ifdef USE_LIGHT
 #ifdef USE_WS2812
-void ws2812_set_array(float *array ,uint8_t len) {
+void ws2812_set_array(float *array ,uint32_t len, uint32_t offset) {
 
   Ws2812ForceSuspend();
-  for (uint8_t cnt=0;cnt<len;cnt++) {
-    if (cnt>Settings.light_pixels) break;
+  for (uint32_t cnt=0;cnt<len;cnt++) {
+    uint32_t index=cnt+offset;
+    if (index>Settings.light_pixels) break;
     uint32_t col=array[cnt];
-    Ws2812SetColor(cnt+1,col>>16,col>>8,col,0);
+    Ws2812SetColor(index+1,col>>16,col>>8,col,0);
   }
   Ws2812ForceUpdate();
 }
@@ -2444,7 +2445,7 @@ char *ForceStringVar(char *lp,char *dstr) {
 }
 
 // replace vars in cmd %var%
-void Replace_Cmd_Vars(char *srcbuf,char *dstbuf,uint16_t dstsize) {
+void Replace_Cmd_Vars(char *srcbuf,uint32_t srcsize, char *dstbuf,uint32_t dstsize) {
     char *cp;
     uint16_t count;
     uint8_t vtype;
@@ -2455,6 +2456,7 @@ void Replace_Cmd_Vars(char *srcbuf,char *dstbuf,uint16_t dstsize) {
     char string[SCRIPT_MAXSSIZE];
     dstsize-=2;
     for (count=0;count<dstsize;count++) {
+        if (srcsize && (*cp==SCRIPT_EOL)) break;
         if (*cp=='%') {
             cp++;
             if (*cp=='%') {
@@ -2869,7 +2871,11 @@ int16_t Run_Scripter(const char *type, int8_t tlen, char *js) {
                   lp=GetNumericResult(lp,OPER_EQU,&cv_inc,0);
                   //SCRIPT_SKIP_EOL
                   cv_ptr=lp;
-                  floop=1;
+                  if (*cv_count<cv_max) {
+                    floop=1;
+                  } else {
+                    floop=2;
+                  }
               } else {
                       // error
                   toLogEOL("for error",lp);
@@ -2877,11 +2883,20 @@ int16_t Run_Scripter(const char *type, int8_t tlen, char *js) {
             } else if (!strncmp(lp,"next",4) && floop>0) {
               // for next loop
               *cv_count+=cv_inc;
-              if (*cv_count<=cv_max) {
-                lp=cv_ptr;
+              if (floop==1) {
+                if (*cv_count<=cv_max) {
+                  lp=cv_ptr;
+                } else {
+                  lp+=4;
+                  floop=0;
+                }
               } else {
-                lp+=4;
-                floop=0;
+                if (*cv_count>=cv_max) {
+                  lp=cv_ptr;
+                } else {
+                  lp+=4;
+                  floop=0;
+                }
               }
             }
 
@@ -3010,6 +3025,12 @@ int16_t Run_Scripter(const char *type, int8_t tlen, char *js) {
               lp+=7;
               lp=isvar(lp,&vtype,&ind,0,0,0);
               if (vtype!=VAR_NV) {
+                SCRIPT_SKIP_SPACES
+                if (*lp!=')') {
+                  lp=GetNumericResult(lp,OPER_EQU,&fvar,0);
+                } else {
+                  fvar=0;
+                }
                 // found variable as result
                 uint8_t index=glob_script_mem.type[ind.index].index;
                 if ((vtype&STYPE)==0) {
@@ -3018,7 +3039,7 @@ int16_t Run_Scripter(const char *type, int8_t tlen, char *js) {
                     uint8_t len=0;
                     float *fa=Get_MFAddr(index,&len);
                     //Serial.printf(">> 2 %d\n",(uint32_t)*fa);
-                    if (fa && len) ws2812_set_array(fa,len);
+                    if (fa && len) ws2812_set_array(fa,len,fvar);
                   }
                 }
               }
@@ -3069,7 +3090,7 @@ int16_t Run_Scripter(const char *type, int8_t tlen, char *js) {
                   //AddLog_P(LOG_LEVEL_INFO, tmp);
                   // replace vars in cmd
                   char *tmp=cmdmem+SCRIPT_CMDMEM/2;
-                  Replace_Cmd_Vars(cmd,tmp,SCRIPT_CMDMEM/2);
+                  Replace_Cmd_Vars(cmd,0,tmp,SCRIPT_CMDMEM/2);
                   //toSLog(tmp);
 
                   if (!strncmp(tmp,"print",5) || pflg) {
@@ -3570,6 +3591,11 @@ const char HTTP_FORM_SDC_HREF[] PROGMEM =
 #endif
 
 uint8_t reject(char *name) {
+
+  char *lcp = strrchr(name,'/');
+  if (lcp) {
+    name=lcp+1;
+  }
 
   while (*name=='/') name++;
   if (*name=='_') return 1;
@@ -4198,7 +4224,7 @@ void Script_Check_Hue(String *response) {
         }
         cp++;
       }
-      Replace_Cmd_Vars(line,tmp,sizeof(tmp));
+      Replace_Cmd_Vars(line,0,tmp,sizeof(tmp));
       // check for hue defintions
       // NAME, TYPE , vars
       cp=tmp;
@@ -4842,6 +4868,17 @@ const char SCRIPT_MSG_TEXTINP[] PROGMEM =
 const char SCRIPT_MSG_NUMINP[] PROGMEM =
   "<div><center><label><b>%s</b><input  min='%s' max='%s' step='%s' value='%s' type='number' style='width:200px' onfocusin='pr(0)' onfocusout='pr(1)' onchange='siva(value,\"%s\")'></label></div>";
 
+const char SCRIPT_MSG_GTABLE[] PROGMEM =
+  "<script type='text/javascript' src='https://www.gstatic.com/charts/loader.js'></script>"
+  "<script type='text/javascript'>google.charts.load('current',{packages:['corechart']});</script>"
+  "<script language='JavaScript'>function drawChart(){var data=google.visualization.arrayToDataTable([";
+
+const char SCRIPT_MSG_GTABLEb[] PROGMEM =
+ "]);var options={title:'%s',isStacked:false};var chart=new google.visualization.%s(document.getElementById('chart%1d'));chart.draw(data,options);}"
+ "google.charts.setOnLoadCallback(drawChart);</script>";
+
+const char SCRIPT_MSG_GTE1[] PROGMEM = "'%s'";
+
 
 void ScriptGetVarname(char *nbuf,char *sp, uint32_t blen) {
 uint32_t cnt;
@@ -4861,6 +4898,7 @@ void ScriptWebShow(char mc) {
     char tmp[128];
     uint8_t optflg=0;
     char *lp=glob_script_mem.section_ptr+2;
+    uint8_t chartindex=1;
     while (lp) {
       while (*lp==SCRIPT_EOL) {
        lp++;
@@ -5041,9 +5079,8 @@ void ScriptWebShow(char mc) {
           dtostrfd(max,4,maxstr);
           dtostrfd(step,4,stepstr);
           WSContentSend_PD(SCRIPT_MSG_NUMINP,label,minstr,maxstr,stepstr,vstr,vname);
-
         } else {
-          Replace_Cmd_Vars(lin,tmp,sizeof(tmp));
+          Replace_Cmd_Vars(lin,0,tmp,sizeof(tmp));
           if (optflg) {
             WSContentSend_PD(PSTR("<div>%s</div>"),tmp);
           } else {
@@ -5052,8 +5089,123 @@ void ScriptWebShow(char mc) {
         }
         } else {
           if (*lin==mc) {
-            Replace_Cmd_Vars(lin+1,tmp,sizeof(tmp));
-            WSContentSend_PD(PSTR("%s"),tmp);
+            lin++;
+            if (!strncmp(lin,"tb(",3)) {
+              // get google table
+              struct T_INDEX ind;
+              uint8_t vtype;
+              char *lp=lin+3;
+              uint8 entries=0;
+              #define MAX_GARRAY 4
+              float *arrays[MAX_GARRAY];
+              uint8_t anum=0;
+              while (anum<MAX_GARRAY) {
+                if (*lp==')' || *lp==0) break;
+                char *lp1=lp;
+                lp=isvar(lp,&vtype,&ind,0,0,0);
+                if (vtype!=VAR_NV) {
+                  SCRIPT_SKIP_SPACES
+                  uint8_t index=glob_script_mem.type[ind.index].index;
+                  if ((vtype&STYPE)==0) {
+                    // numeric result
+                    //Serial.printf("numeric\n");
+                    if (glob_script_mem.type[index].bits.is_filter) {
+                      //Serial.printf("numeric array\n");
+                      uint8_t len=0;
+                      float *fa=Get_MFAddr(index,&len);
+                      //Serial.printf(">> 2 %d\n",(uint32_t)*fa);
+                      if (fa && len>=entries) {
+                        if (!entries) {entries = len;}
+                        // add array to list
+                        arrays[anum]=fa;
+                        anum++;
+                      }
+                    }
+                  } else {
+                    lp=lp1;
+                    break;
+                  }
+                }
+              }
+              //Serial.printf("arrays %d\n",anum);
+              //Serial.printf("entries %d\n",entries);
+
+              WSContentSend_PD(SCRIPT_MSG_GTABLE);
+              // we know how many arrays and the number of entries
+              // we need to fetch the labels now
+              WSContentSend_PD("[");
+              for (uint32_t cnt=0; cnt<anum+1; cnt++) {
+                char label[SCRIPT_MAXSSIZE];
+                lp=GetStringResult(lp,OPER_EQU,label,0);
+                SCRIPT_SKIP_SPACES
+                WSContentSend_PD(SCRIPT_MSG_GTE1,label);
+                //Serial.printf("labels %s\n",label);
+                if (cnt<anum) { WSContentSend_PD(","); }
+              }
+              WSContentSend_PD("],");
+
+              // now we have to export the values
+              // fetch label part only once in combo string
+              char label[SCRIPT_MAXSSIZE];
+              lp=GetStringResult(lp,OPER_EQU,label,0);
+              SCRIPT_SKIP_SPACES
+              char *lblp=label;
+
+              for (uint32_t cnt=0; cnt<entries; cnt++) {
+                WSContentSend_PD("['");
+                char lbl[16];
+                strncpy(lbl,lblp,sizeof(lbl));
+                for (uint32_t i=0; i<strlen(lblp); i++) {
+                  if (lblp[i]=='|') {
+                    lbl[i]=0;
+                    lblp+=i+1;
+                    break;
+                  }
+                  lbl[i]=lblp[i];
+                }
+                WSContentSend_PD(lbl);
+                WSContentSend_PD("',");
+                for (uint32_t ind=0; ind<anum; ind++) {
+                  char acbuff[32];
+                  float *fp=arrays[ind];
+                  dtostrfd(fp[cnt],glob_script_mem.script_dprec,acbuff);
+                  WSContentSend_PD("%s",acbuff);
+                  if (ind<anum-1) { WSContentSend_PD(","); }
+                }
+                WSContentSend_PD("]");
+                if (cnt<entries-1) { WSContentSend_PD(","); }
+              }
+
+              char header[SCRIPT_MAXSSIZE];
+              lp=GetStringResult(lp,OPER_EQU,header,0);
+              SCRIPT_SKIP_SPACES
+
+              const char *type;
+              if (*lp!=')') {
+                switch (*lp) {
+                  case 'l':
+                    type="LineChart";
+                    break;
+                  case 'b':
+                    type="BarChart";
+                    break;
+                  case 'p':
+                    type="PieChart";
+                    break;
+                  default:
+                    type="ColumnChart";
+                    break;
+                }
+              } else {
+                type="ColumnChart";
+              }
+
+              WSContentSend_PD(SCRIPT_MSG_GTABLEb,header,type,chartindex);
+              chartindex++;
+            } else {
+              Replace_Cmd_Vars(lin,0,tmp,sizeof(tmp));
+              WSContentSend_PD(PSTR("%s"),tmp);
+            }
           }
         }
       }
@@ -5097,7 +5249,7 @@ uint8_t msect=Run_Scripter(">m",-2,0);
           }
           cp++;
         }
-        Replace_Cmd_Vars(line,tmp,sizeof(tmp));
+        Replace_Cmd_Vars(line,0,tmp,sizeof(tmp));
         //client->println(tmp);
         func(tmp);
       }
@@ -5142,7 +5294,7 @@ void ScriptJsonAppend(void) {
           }
           cp++;
         }
-        Replace_Cmd_Vars(line,tmp,sizeof(tmp));
+        Replace_Cmd_Vars(line,0,tmp,sizeof(tmp));
         ResponseAppend_P(PSTR("%s"),tmp);
       }
       if (*lp==SCRIPT_EOL) {
@@ -5414,7 +5566,6 @@ bool Xdrv10(uint8_t function)
   }
   return result;
 }
-
 
 
 #endif  // Do not USE_RULES
