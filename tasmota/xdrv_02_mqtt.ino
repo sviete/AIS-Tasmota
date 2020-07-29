@@ -428,10 +428,20 @@ void MqttPublishPrefixTopic_P(uint32_t prefix, const char* subtopic)
   MqttPublishPrefixTopic_P(prefix, subtopic, false);
 }
 
+void MqttPublishPrefixTopicRulesProcess_P(uint32_t prefix, const char* subtopic, bool retained)
+{
+  MqttPublishPrefixTopic_P(prefix, subtopic, retained);
+  XdrvRulesProcess();
+}
+
+void MqttPublishPrefixTopicRulesProcess_P(uint32_t prefix, const char* subtopic)
+{
+  MqttPublishPrefixTopicRulesProcess_P(prefix, subtopic, false);
+}
+
 void MqttPublishTeleSensor(void)
 {
-  MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);  // CMND_SENSORRETAIN
-  XdrvRulesProcess();
+  MqttPublishPrefixTopicRulesProcess_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);  // CMND_SENSORRETAIN
 }
 
 void MqttPublishPowerState(uint32_t device)
@@ -559,10 +569,10 @@ void MqttConnected(void)
       if (Settings.webserver) {
 #if LWIP_IPV6
         Response_P(PSTR("{\"" D_JSON_WEBSERVER_MODE "\":\"%s\",\"" D_CMND_HOSTNAME "\":\"%s\",\"" D_CMND_IPADDRESS "\":\"%s\",\"IPv6Address\":\"%s\"}"),
-          (2 == Settings.webserver) ? D_ADMIN : D_USER, my_hostname, WiFi.localIP().toString().c_str(),WifiGetIPv6().c_str());
+          (2 == Settings.webserver) ? D_ADMIN : D_USER, NetworkHostname(), NetworkAddress().toString().c_str(), WifiGetIPv6().c_str());
 #else
         Response_P(PSTR("{\"" D_JSON_WEBSERVER_MODE "\":\"%s\",\"" D_CMND_HOSTNAME "\":\"%s\",\"" D_CMND_IPADDRESS "\":\"%s\"}"),
-          (2 == Settings.webserver) ? D_ADMIN : D_USER, my_hostname, WiFi.localIP().toString().c_str());
+          (2 == Settings.webserver) ? D_ADMIN : D_USER, NetworkHostname(), NetworkAddress().toString().c_str());
 #endif // LWIP_IPV6 = 1
         MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_INFO "2"));
       }
@@ -688,6 +698,8 @@ void MqttReconnect(void)
       AddLog_P(LOG_LEVEL_INFO, S_LOG_MQTT, PSTR("MFLN not supported by TLS server"));
     }
 #ifndef USE_MQTT_TLS_CA_CERT  // don't bother with fingerprints if using CA validation
+// **** Start patch Castellucci
+/*
     // create a printable version of the fingerprint received
     char buf_fingerprint[64];
     ToHex_P((unsigned char *)tlsClient->getRecvPubKeyFingerprint(), 20, buf_fingerprint, sizeof(buf_fingerprint), ' ');
@@ -716,6 +728,35 @@ void MqttReconnect(void)
         SettingsSaveAll();  // save settings
       }
     }
+*/
+    const uint8_t *recv_fingerprint = tlsClient->getRecvPubKeyFingerprint();
+    // create a printable version of the fingerprint received
+    char buf_fingerprint[64];
+    ToHex_P(recv_fingerprint, 20, buf_fingerprint, sizeof(buf_fingerprint), ' ');
+    AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_MQTT "Server fingerprint: %s"), buf_fingerprint);
+
+    bool learned = false;
+
+    // If the fingerprint slot is marked for update, we'll do so.
+    // Otherwise, if the fingerprint slot had the magic trust-on-first-use
+    // value, we will save the current fingerprint there, but only if the other fingerprint slot
+    // *didn't* match it.
+    if (recv_fingerprint[20] & 0x1 || (learn_fingerprint1 && 0 != memcmp(recv_fingerprint, Settings.mqtt_fingerprint[1], 20))) {
+      memcpy(Settings.mqtt_fingerprint[0], recv_fingerprint, 20);
+      learned = true;
+    }
+    // As above, but for the other slot.
+    if (recv_fingerprint[20] & 0x2 || (learn_fingerprint2 && 0 != memcmp(recv_fingerprint, Settings.mqtt_fingerprint[0], 20))) {
+      memcpy(Settings.mqtt_fingerprint[1], recv_fingerprint, 20);
+      learned = true;
+    }
+
+    if (learned) {
+      AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MQTT "Fingerprint learned: %s"), buf_fingerprint);
+
+      SettingsSaveAll();  // save settings
+    }
+// **** End patch Castellucci
 #endif // !USE_MQTT_TLS_CA_CERT
 #endif // USE_MQTT_TLS
     MqttConnected();
@@ -1238,11 +1279,7 @@ void CmndTlsDump(void) {
   uint32_t end   = start + tls_block_len -1;
   for (uint32_t pos = start; pos < end; pos += 0x10) {
     uint32_t* values = (uint32_t*)(pos);
-#ifdef ARDUINO_ESP8266_RELEASE_2_3_0
-    Serial.printf("%08x:  %08x %08x %08x %08x\n", pos, bswap32(values[0]), bswap32(values[1]), bswap32(values[2]), bswap32(values[3]));
-#else
     Serial.printf_P(PSTR("%08x:  %08x %08x %08x %08x\n"), pos, bswap32(values[0]), bswap32(values[1]), bswap32(values[2]), bswap32(values[3]));
-#endif
   }
 }
 #endif  // DEBUG_DUMP_TLS
@@ -1264,14 +1301,14 @@ const char HTTP_BTN_MENU_MQTT[] PROGMEM =
 const char HTTP_FORM_MQTT1[] PROGMEM =
   "<fieldset><legend><b>&nbsp;" D_MQTT_PARAMETERS "&nbsp;</b></legend>"
   "<form method='get' action='" WEB_HANDLE_MQTT "'>"
-  "<p><b>" D_HOST "</b> (" MQTT_HOST ")<br><input id='mh' placeholder='" MQTT_HOST" ' value='%s'></p>"
+  "<p><b>" D_HOST "</b> (" MQTT_HOST ")<br><input id='mh' placeholder=\"" MQTT_HOST "\" value=\"%s\"></p>"
   "<p><b>" D_PORT "</b> (" STR(MQTT_PORT) ")<br><input id='ml' placeholder='" STR(MQTT_PORT) "' value='%d'></p>"
-  "<p><b>" D_CLIENT "</b> (%s)<br><input id='mc' placeholder='%s' value='%s'></p>";
+  "<p><b>" D_CLIENT "</b> (%s)<br><input id='mc' placeholder=\"%s\" value=\"%s\"></p>";
 const char HTTP_FORM_MQTT2[] PROGMEM =
-  "<p><b>" D_USER "</b> (" MQTT_USER ")<br><input id='mu' placeholder='" MQTT_USER "' value='%s'></p>"
-  "<p><label><b>" D_PASSWORD "</b><input type='checkbox' onclick='sp(\"mp\")'></label><br><input id='mp' type='password' placeholder='" D_PASSWORD "' value='" D_ASTERISK_PWD "'></p>"
-  "<p><b>" D_TOPIC "</b> = %%topic%% (%s)<br><input id='mt' placeholder='%s' value='%s'></p>"
-  "<p><b>" D_FULL_TOPIC "</b> (%s)<br><input id='mf' placeholder='%s' value='%s'></p>";
+  "<p><b>" D_USER "</b> (" MQTT_USER ")<br><input id='mu' placeholder=\"" MQTT_USER "\" value=\"%s\"></p>"
+  "<p><label><b>" D_PASSWORD "</b><input type='checkbox' onclick='sp(\"mp\")'></label><br><input id='mp' type='password' placeholder=\"" D_PASSWORD "\" value=\"" D_ASTERISK_PWD "\"></p>"
+  "<p><b>" D_TOPIC "</b> = %%topic%% (%s)<br><input id='mt' placeholder=\"%s\" value=\"%s\"></p>"
+  "<p><b>" D_FULL_TOPIC "</b> (%s)<br><input id='mf' placeholder=\"%s\" value=\"%s\"></p>";
 
 void HandleMqttConfiguration(void)
 {
