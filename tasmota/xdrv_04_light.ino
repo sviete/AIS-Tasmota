@@ -314,16 +314,6 @@ power_t LightPower(void)
   return Light.power;                     // Make external
 }
 
-// IRAM variant for rotary
-#ifndef ARDUINO_ESP8266_RELEASE_2_3_0      // Fix core 2.5.x ISR not in IRAM Exception
-power_t LightPowerIRAM(void) ICACHE_RAM_ATTR;
-#endif  // ARDUINO_ESP8266_RELEASE_2_3_0
-
-power_t LightPowerIRAM(void)
-{
-  return Light.power;                     // Make external
-}
-
 uint8_t LightDevice(void)
 {
   return Light.device;                    // Make external
@@ -487,7 +477,7 @@ class LightStateClass {
       if (w) { *w = ct_channels_on  ? changeUIntScale(_ww, 0, 255, 0, _briCT) : 0; }
     }
 
-    uint8_t getChannels(uint8_t *channels) {
+    void getChannels(uint8_t *channels) {
       getActualRGBCW(&channels[0], &channels[1], &channels[2], &channels[3], &channels[4]);
     }
 
@@ -650,7 +640,7 @@ class LightStateClass {
           _ww = changeUIntScale(w, 0, max, 0, 255);
           _wc = changeUIntScale(c, 0, max, 0, 255);
         }
-        _ct = changeUIntScale(w, 0, sum, _ct_min_range, _ct_max_range);
+        _ct = changeUIntScale(w, 0, sum, CT_MIN, CT_MAX);
         addCTMode();   // activate CT mode if needed
         if (_color_mode & LCM_CT) { _briCT = free_range ? max : (sum > 255 ? 255 : sum); }
       }
@@ -836,28 +826,44 @@ void LightStateClass::HsToRgb(uint16_t hue, uint8_t sat, uint8_t *r_r, uint8_t *
 
 #define POW FastPrecisePowf
 
+//
+// Matrix 3x3 multiplied to a 3 vector, result in a 3 vector
+//
+void mat3x3(const float *mat33, const float *vec3, float *res3) {
+  for (uint32_t i = 0; i < 3; i++) {
+    const float * v = vec3;
+    *res3 = 0.0f;
+    for (uint32_t j = 0; j < 3; j++) {
+      *res3 += *mat33++ * *v++;
+    }
+    res3++;
+  }
+}
+
 void LightStateClass::RgbToXy(uint8_t i_r, uint8_t i_g, uint8_t i_b, float *r_x, float *r_y) {
   float x = 0.31271f;   // default medium white
   float y = 0.32902f;
 
   if (i_r + i_b + i_g > 0) {
-    float r = (float)i_r / 255.0f;
-    float g = (float)i_g / 255.0f;
-    float b = (float)i_b / 255.0f;
+    float rgb[3] = { (float)i_r, (float)i_g, (float)i_b };
     // https://gist.github.com/popcorn245/30afa0f98eea1c2fd34d
     // Gamma correction
-    r = (r > 0.04045f) ? POW((r + 0.055f) / (1.0f + 0.055f), 2.4f) : (r / 12.92f);
-    g = (g > 0.04045f) ? POW((g + 0.055f) / (1.0f + 0.055f), 2.4f) : (g / 12.92f);
-    b = (b > 0.04045f) ? POW((b + 0.055f) / (1.0f + 0.055f), 2.4f) : (b / 12.92f);
+    for (uint32_t i = 0; i < 3; i++) {
+      rgb[i] = rgb[i] / 255.0f;
+      rgb[i] = (rgb[i] > 0.04045f) ? POW((rgb[i] + 0.055f) / (1.0f + 0.055f), 2.4f) : (rgb[i] / 12.92f);
+    }
 
     // conversion to X, Y, Z
     // Y is also the Luminance
-    float X = r * 0.649926f + g * 0.103455f + b * 0.197109f;
-    float Y = r * 0.234327f + g * 0.743075f + b * 0.022598f;
-    float Z = r * 0.000000f + g * 0.053077f + b * 1.035763f;
+    float XYZ[3];
+    static const float XYZ_factors[] = {  0.649926f, 0.103455f, 0.197109f,
+                                          0.234327f, 0.743075f, 0.022598f,
+                                          0.000000f, 0.053077f, 1.035763f };
+    mat3x3(XYZ_factors, rgb, XYZ);
 
-    x = X / (X + Y + Z);
-    y = Y / (X + Y + Z);
+    float XYZ_sum = XYZ[0] + XYZ[1] + XYZ[2];
+    x = XYZ[0] / XYZ_sum;
+    y = XYZ[1] / XYZ_sum;
     // we keep the raw gamut, one nice thing could be to convert to a narrower gamut
   }
   if (r_x)  *r_x = x;
@@ -866,36 +872,33 @@ void LightStateClass::RgbToXy(uint8_t i_r, uint8_t i_g, uint8_t i_b, float *r_x,
 
 void LightStateClass::XyToRgb(float x, float y, uint8_t *rr, uint8_t *rg, uint8_t *rb)
 {
+  float XYZ[3], rgb[3];
   x = (x > 0.99f ? 0.99f : (x < 0.01f ? 0.01f : x));
   y = (y > 0.99f ? 0.99f : (y < 0.01f ? 0.01f : y));
   float z = 1.0f - x - y;
-  //float Y = 1.0f;
-  float X = x / y;
-  float Z = z / y;
-  // float r =  X * 1.4628067f - 0.1840623f - Z * 0.2743606f;
-  // float g = -X * 0.5217933f + 1.4472381f + Z * 0.0677227f;
-  // float b =  X * 0.0349342f - 0.0968930f + Z * 1.2884099f;
-  float r =  X * 3.2406f - 1.5372f - Z * 0.4986f;
-  float g = -X * 0.9689f + 1.8758f + Z * 0.0415f;
-  float b =  X * 0.0557f - 0.2040f + Z * 1.0570f;
-  float max = (r > g && r > b) ? r : (g > b) ? g : b;
-  r = r / max;    // normalize to max == 1.0
-  g = g / max;
-  b = b / max;
-  r = (r <= 0.0031308f) ? 12.92f * r : 1.055f * POW(r, (1.0f / 2.4f)) - 0.055f;
-  g = (g <= 0.0031308f) ? 12.92f * g : 1.055f * POW(g, (1.0f / 2.4f)) - 0.055f;
-  b = (b <= 0.0031308f) ? 12.92f * b : 1.055f * POW(b, (1.0f / 2.4f)) - 0.055f;
-  //
-  // AddLog_P2(LOG_LEVEL_DEBUG_MORE, "XyToRgb XZ (%s %s) rgb (%s %s %s)",
-  //   String(X,5).c_str(), String(Z,5).c_str(),
-  //   String(r,5).c_str(), String(g,5).c_str(),String(b,5).c_str());
+  XYZ[0] = x / y;
+  XYZ[1] = 1.0f;
+  XYZ[2] = z / y;
 
-  int32_t ir = r * 255.0f + 0.5f;
-  int32_t ig = g * 255.0f + 0.5f;
-  int32_t ib = b * 255.0f + 0.5f;
-  if (rr) { *rr = (ir > 255 ? 255: (ir < 0 ? 0 : ir)); }
-  if (rg) { *rg = (ig > 255 ? 255: (ig < 0 ? 0 : ig)); }
-  if (rb) { *rb = (ib > 255 ? 255: (ib < 0 ? 0 : ib)); }
+  static const float rgb_factors[] = {  3.2406f, -1.5372f, -0.4986f,
+                                       -0.9689f,  1.8758f,  0.0415f,
+                                        0.0557f, -0.2040f,  1.0570f };
+  mat3x3(rgb_factors, XYZ, rgb);
+  float max = (rgb[0] > rgb[1] && rgb[0] > rgb[2]) ? rgb[0] : (rgb[1] > rgb[2]) ? rgb[1] : rgb[2];
+
+  for (uint32_t i = 0; i < 3; i++) {
+    rgb[i] = rgb[i] / max; // normalize to max == 1.0
+    rgb[i] = (rgb[i] <= 0.0031308f) ? 12.92f * rgb[i] : 1.055f * POW(rgb[i], (1.0f / 2.4f)) - 0.055f; // gamma
+  }
+
+  int32_t irgb[3];
+  for (uint32_t i = 0; i < 3; i++) {
+    irgb[i] = rgb[i] * 255.0f + 0.5f;
+  }
+
+  if (rr) { *rr = (irgb[0] > 255 ? 255: (irgb[0] < 0 ? 0 : irgb[0])); }
+  if (rg) { *rg = (irgb[1] > 255 ? 255: (irgb[1] < 0 ? 0 : irgb[1])); }
+  if (rb) { *rb = (irgb[2] > 255 ? 255: (irgb[2] < 0 ? 0 : irgb[2])); }
 }
 
 class LightControllerClass {
@@ -1416,6 +1419,10 @@ void LightGetHSB(uint16_t *hue, uint8_t *sat, uint8_t *bri) {
   light_state.getHSB(hue, sat, bri);
 }
 
+void LightGetXY(float *X, float *Y) {
+  light_state.getXY(X, Y);
+}
+
 void LightHsToRgb(uint16_t hue, uint8_t sat, uint8_t *r_r, uint8_t *r_g, uint8_t *r_b) {
   light_state.HsToRgb(hue, sat, r_r, r_g, r_b);
 }
@@ -1461,12 +1468,39 @@ void LightSetBri(uint8_t device, uint8_t bri) {
   }
 }
 
+void LightColorOffset(int32_t offset) {
+  uint16_t hue;
+  uint8_t sat;
+  light_state.getHSB(&hue, &sat, nullptr);  // Allow user control over Saturation
+  hue += offset;
+  if (hue < 0) { hue += 359; }
+  if (hue > 359) { hue -= 359; }
+  if (!Light.pwm_multi_channels) {
+    light_state.setHS(hue, sat);
+  } else {
+    light_state.setHS(hue, 255);
+    light_state.setBri(255);        // If multi-channel, force bri to max, it will be later dimmed to correct value
+  }
+  light_controller.calcLevels(Light.new_color);
+}
+
+bool LightColorTempOffset(int32_t offset) {
+  int32_t ct = LightGetColorTemp();
+  if (0 == ct) { return false; }  // CT not supported
+  ct += offset;
+  if (ct < CT_MIN) { ct = CT_MIN; }
+  else if (ct > CT_MAX) { ct = CT_MAX; }
+
+  LightSetColorTemp(ct);
+  return true;
+}
+
 void LightSetColorTemp(uint16_t ct)
 {
 /* Color Temperature (https://developers.meethue.com/documentation/core-concepts)
  *
- * ct = 153 = 6500K = Cold = CCWW = FF00
- * ct = 600 = 2000K = Warm = CCWW = 00FF
+ * ct = 153 mirek = 6500K = Cold = CCWW = FF00
+ * ct = 500 mirek = 2000K = Warm = CCWW = 00FF
  */
   // don't set CT if not supported
   if ((LST_COLDWARM != Light.subtype) && (LST_RGBCW != Light.subtype)) {
@@ -1524,7 +1558,7 @@ void LightPowerOn(void)
   }
 }
 
-void LightState(uint8_t append)
+void ResponseLightState(uint8_t append)
 {
   char scolor[LIGHT_COLOR_SIZE];
   char scommand[33];
@@ -1538,10 +1572,10 @@ void LightState(uint8_t append)
   if (!Light.pwm_multi_channels) {
     if (unlinked) {
       // RGB and W are unlinked, we display the second Power/Dimmer
-      ResponseAppend_P(PSTR("\"" D_RSLT_POWER "%d\":\"%s\",\"" D_CMND_DIMMER "%d\":%d"
-                           ",\"" D_RSLT_POWER "%d\":\"%s\",\"" D_CMND_DIMMER "%d\":%d"),
-                            Light.device, GetStateText(Light.power & 1), Light.device, light_state.getDimmer(1),
-                            Light.device + 1, GetStateText(Light.power & 2 ? 1 : 0), Light.device + 1, light_state.getDimmer(2));
+      ResponseAppend_P(PSTR("\"" D_RSLT_POWER "%d\":\"%s\",\"" D_CMND_DIMMER "1\":%d"
+                           ",\"" D_RSLT_POWER "%d\":\"%s\",\"" D_CMND_DIMMER "2\":%d"),
+                            Light.device, GetStateText(Light.power & 1), light_state.getDimmer(1),
+                            Light.device + 1, GetStateText(Light.power & 2 ? 1 : 0), light_state.getDimmer(2));
     } else {
       GetPowerDevice(scommand, Light.device, sizeof(scommand), Settings.flag.device_index_enable);  // SetOption26 - Switch between POWER or POWER1
       ResponseAppend_P(PSTR("\"%s\":\"%s\",\"" D_CMND_DIMMER "\":%d"), scommand, GetStateText(Light.power & 1),
@@ -1674,7 +1708,7 @@ void LightPreparePower(power_t channels = 0xFFFFFFFF) {    // 1 = only RGB, 2 = 
   AddLog_P2(LOG_LEVEL_DEBUG, "LightPreparePower End power=%d Light.power=%d", power, Light.power);
 #endif
   Light.power = power >> (Light.device - 1);  // reset next state, works also with unlinked RGB/CT
-  LightState(0);
+  ResponseLightState(0);
 }
 
 #ifdef USE_LIGHT_PALETTE
@@ -1742,9 +1776,9 @@ void LightCycleColor(int8_t direction)
 //  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("LGT: random %d, wheel %d, hue %d"), Light.random, Light.wheel, hue);
 
   if (!Light.pwm_multi_channels) {
-  uint8_t sat;
-  light_state.getHSB(nullptr, &sat, nullptr);  // Allow user control over Saturation
-  light_state.setHS(hue, sat);
+    uint8_t sat;
+    light_state.getHSB(nullptr, &sat, nullptr);  // Allow user control over Saturation
+    light_state.setHS(hue, sat);
   } else {
     light_state.setHS(hue, 255);
     light_state.setBri(255);        // If multi-channel, force bri to max, it will be later dimmed to correct value
@@ -1842,10 +1876,9 @@ void LightAnimate(void)
             MqttPublishPrefixTopic_P(TELE, PSTR(D_CMND_WAKEUP));
 */
             Response_P(PSTR("{\"" D_CMND_WAKEUP "\":\"" D_JSON_DONE "\""));
-            LightState(1);
+            ResponseLightState(1);
             ResponseJsonEnd();
-            MqttPublishPrefixTopic_P(RESULT_OR_STAT, PSTR(D_CMND_WAKEUP));
-            XdrvRulesProcess();
+            MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_STAT, PSTR(D_CMND_WAKEUP));
 
             Light.wakeup_active = 0;
             Settings.light_scheme = LS_POWER;
@@ -2141,7 +2174,9 @@ void LightSetOutputs(const uint16_t *cur_col_10) {
         if (!isChannelCT(i)) {   // if CT don't use pwm_min and pwm_max
           cur_col = cur_col > 0 ? changeUIntScale(cur_col, 0, Settings.pwm_range, Light.pwm_min, Light.pwm_max) : 0;   // shrink to the range of pwm_min..pwm_max
         }
-        analogWrite(Pin(GPIO_PWM1, i), bitRead(pwm_inverted, i) ? Settings.pwm_range - cur_col : cur_col);
+        if (!Settings.flag4.zerocross_dimmer) {
+          analogWrite(Pin(GPIO_PWM1, i), bitRead(pwm_inverted, i) ? Settings.pwm_range - cur_col : cur_col);
+        }
       }
     }
   }
@@ -2643,7 +2678,7 @@ void CmndHsbColor(void)
       light_controller.changeHSB(HSB[0], HSB[1], HSB[2]);
       LightPreparePower(1);
     } else {
-      LightState(0);
+      ResponseLightState(0);
     }
   }
 }
@@ -2726,6 +2761,16 @@ void CmndColorTemperature(void)
       ResponseCmndNumber(ct);
     }
   }
+}
+
+void LightDimmerOffset(uint32_t index, int32_t offset) {
+  int32_t dimmer = light_state.getDimmer(index) + offset;
+  if (dimmer < 1) { dimmer = Settings.flag3.slider_dimmer_stay_on; }  // SetOption77 - Do not power off if slider moved to far left
+  if (dimmer > 100) { dimmer = 100; }
+
+  XdrvMailbox.index = index;
+  XdrvMailbox.payload = dimmer;
+  CmndDimmer();
 }
 
 void CmndDimmer(void)
