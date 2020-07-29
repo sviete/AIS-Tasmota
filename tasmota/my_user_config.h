@@ -259,7 +259,7 @@
 
 #define APP_FLASH_CYCLE        false             // [SetOption12] Switch between dynamic or fixed slot flash save location
 #define APP_NO_RELAY_SCAN      false             // [SetOption63] Don't scan relay power state at restart
-#define APP_DISABLE_POWERCYCLE false             // [SetOption65] Disable fast power cycle detection for device reset
+#define APP_DISABLE_POWERCYCLE true             // [SetOption65] Disable fast power cycle detection for device reset
 #define DEEPSLEEP_BOOTCOUNT    false             // [SetOption76] Enable incrementing bootcount when deepsleep is enabled
 
 // -- Lights --------------------------------------
