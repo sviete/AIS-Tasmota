@@ -50,7 +50,6 @@ struct BUTTON {
 #endif // ESP32
   uint8_t present = 0;                       // Number of buttons found flag
   uint8_t adc = 99;                          // ADC0 button number
-  int ais_restart_flag = 1;                  // AIS dom reset flag
 } Button;
 
 #ifdef ESP32
@@ -260,7 +259,6 @@ void ButtonHandler(void)
           if (Button.hold_timer[button_index] == loops_per_second * Settings.param[P_HOLD_TIME] / 10) {  // Button hold
                 AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - start Wi-Fi Manager, button hold %d"), Button.hold_timer[button_index]);
                 // AIS dom WifiConfig 2 always - start Wi-Fi Manager
-                Button.ais_restart_flag = 2;
                 snprintf_P(scmnd, sizeof(scmnd), PSTR(D_CMND_WIFICONFIG " 2"));
                 ExecuteCommand(scmnd, SRC_BUTTON);
           }
@@ -317,7 +315,6 @@ void ButtonHandler(void)
                 if (!Settings.flag3.mqtt_buttons && single_press && SendKey(KEY_BUTTON, button_index + Button.press_counter[button_index], POWER_TOGGLE)) {  // Execute Toggle command via MQTT if ButtonTopic is set
                   // Success
                 } else {
-		  // AIS dom start
                   if (Button.press_counter[button_index] < 6) { // Single to Penta press
                     if (WifiState() > WIFI_RESTART) {           // Wifimanager active
                       restart_flag = 1;
@@ -348,7 +345,6 @@ void ButtonHandler(void)
                       ExecuteCommand(scmnd, SRC_BUTTON);
                     }
                   }
-	     	  // AIS dom end
                   if (Settings.flag3.mqtt_buttons) {   // SetOption73 (0) - Decouple button from relay and send just mqtt topic
                     if (Button.press_counter[button_index] >= 1 && Button.press_counter[button_index] <= 5) {
                       MqttButtonTopic(button_index +1, Button.press_counter[button_index], 0);
