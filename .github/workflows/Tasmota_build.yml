@@ -1523,7 +1523,7 @@ jobs:
         git rm -r --cached .
         git add ./README.md
         git add -f ./firmware/*.*
-        git commit -m "Tasmota ESP Binaries http://tasmota.com"
+        git commit -m "AIS-Tasmota ESP Binaries https://www.ai-speaker.com"
     - name: Push changes  # push the firmware files to branch firmware
       uses: ad-m/github-push-action@master
       with:
