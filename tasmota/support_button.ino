@@ -264,7 +264,7 @@ void ButtonHandler(void)
                 snprintf_P(scmnd, sizeof(scmnd), PSTR(D_CMND_WIFICONFIG " 2"));
                 ExecuteCommand(scmnd, SRC_BUTTON);
           }
-          if (Settings.flag.button_single) {                   // SetOption13 (0) - Allow only single button press for immediate action
+          if (Settings.flag.button_single) {           // SetOption13 (0) - Allow only single button press for immediate action
             if (Button.hold_timer[button_index] == loops_per_second * hold_time_extent * Settings.param[P_HOLD_TIME] / 10) {  // SetOption32 (40) - Button held for factor times longer
               snprintf_P(scmnd, sizeof(scmnd), PSTR(D_CMND_SETOPTION "13 0"));  // Disable single press only
               ExecuteCommand(scmnd, SRC_BUTTON);
@@ -317,26 +317,38 @@ void ButtonHandler(void)
                 if (!Settings.flag3.mqtt_buttons && single_press && SendKey(KEY_BUTTON, button_index + Button.press_counter[button_index], POWER_TOGGLE)) {  // Execute Toggle command via MQTT if ButtonTopic is set
                   // Success
                 } else {
-                  if (Button.press_counter[button_index] < 3) {  // Single or Double press
-                    if (WifiState() > WIFI_RESTART) {          // Wifimanager active
-                      // AIS dom - do not restart after first press - to support AP on hold
-                      Button.ais_restart_flag--;
-                      if (Button.ais_restart_flag <= 0) {
-                        restart_flag = 1;
-                      }
-                      AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - button pressed, ais_restart_flag %d"), Button.ais_restart_flag);
-                    } else {
-                      ExecuteCommandPower(button_index + Button.press_counter[button_index], POWER_TOGGLE, SRC_BUTTON);  // Execute Toggle command internally
+		  // AIS dom start
+                  if (Button.press_counter[button_index] < 6) { // Single to Penta press
+                    if (WifiState() > WIFI_RESTART) {           // Wifimanager active
+                      restart_flag = 1;
                     }
-                  } else {                                     // 3 - 7 press
-                    if (!Settings.flag.button_restrict) {      // SetOption1 (0)
-                      AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - start Wi-Fi Manager, button pressed %d"), Button.press_counter[button_index]);
-                      Button.ais_restart_flag = 1; // next click will restart
-                      // AIS dom WifiConfig 2 always - start Wi-Fi Manager
+                    if (!Settings.flag3.mqtt_buttons) {         // SetOption73 - Detach buttons from relays and enable MQTT action state for multipress
+                      if (Button.press_counter[button_index] == 1) {  // By default first press always send a TOGGLE (2)
+                        ExecuteCommandPower(button_index + Button.press_counter[button_index], POWER_TOGGLE, SRC_BUTTON);
+                      } else {
+                        SendKey(KEY_BUTTON, button_index +1, Button.press_counter[button_index] +9);    // 2,3,4 and 5 press send just the key value (11,12,13 and 14) for rules
+                        if (0 == button_index) {               // BUTTON1 can toggle up to 5 relays if present. If a relay is not present will send out the key value (2,11,12,13 and 14) for rules
+                          bool valid_relay = PinUsed(GPIO_REL1, Button.press_counter[button_index]-1);
+#ifdef ESP8266
+                          if ((SONOFF_DUAL == my_module_type) || (CH4 == my_module_type)) {
+                            valid_relay = (Button.press_counter[button_index] <= devices_present);
+                          }
+#endif  // ESP8266
+                          if ((Button.press_counter[button_index] > 1) && valid_relay && (Button.press_counter[button_index] <= MAX_RELAY_BUTTON1)) {
+                            ExecuteCommandPower(button_index + Button.press_counter[button_index], POWER_TOGGLE, SRC_BUTTON);   // Execute Toggle command internally
+//                            AddLog_P2(LOG_LEVEL_DEBUG, PSTR("DBG: Relay%d found on GPIO%d"), Button.press_counter[button_index], Pin(GPIO_REL1, Button.press_counter[button_index]-1));
+                          }
+                        }
+                      }
+                    }
+
+                  } else {    // 6 press start wificonfig 2
+                    if (!Settings.flag.button_restrict) {
                       snprintf_P(scmnd, sizeof(scmnd), PSTR(D_CMND_WIFICONFIG " 2"));
                       ExecuteCommand(scmnd, SRC_BUTTON);
                     }
                   }
+	     	  // AIS dom end
                   if (Settings.flag3.mqtt_buttons) {   // SetOption73 (0) - Decouple button from relay and send just mqtt topic
                     if (Button.press_counter[button_index] >= 1 && Button.press_counter[button_index] <= 5) {
                       MqttButtonTopic(button_index +1, Button.press_counter[button_index], 0);

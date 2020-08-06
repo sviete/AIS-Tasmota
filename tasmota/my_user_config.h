@@ -74,7 +74,6 @@
 #define STA_SSID2              "8DB0839D"                // [Ssid2] Optional alternate AP Wifi SSID
 #define STA_PASS2              "094FAFE8"                // [Password2] Optional alternate AP Wifi password
 #define WIFI_AP_PASSPHRASE     ""                // AccessPoint passphrase. For WPA2 min 8 char, for open use "" (max 63 char).
-
 #define WIFI_CONFIG_TOOL       WIFI_RETRY        // [WifiConfig] Default tool if wifi fails to connect (default option: 4 - WIFI_RETRY)
                                                  // (WIFI_RESTART, WIFI_MANAGER, WIFI_RETRY, WIFI_WAIT, WIFI_SERIAL, WIFI_MANAGER_RESET_ONLY)
                                                  // The configuration can be changed after first setup using WifiConfig 0, 2, 4, 5, 6 and 7.
@@ -177,6 +176,18 @@
 #define COLOR_INPUT                 "#fff"       // [WebColor5] Input background color - White
 #define COLOR_CONSOLE_TEXT          "#000"       // [WebColor6] Console text color - Black
 #define COLOR_CONSOLE               "#fff"       // [WebColor7] Console background color - White
+#define COLOR_TEXT_WARNING          "#f00"       // [WebColor8] Warning text color - Red
+#define COLOR_TEXT_SUCCESS          "#008000"    // [WebColor9] Success text color - Dark lime green
+#define COLOR_BUTTON_TEXT           "#fff"       // [WebColor10] Button text color - White
+#define COLOR_BUTTON                "#1fa3ec"    // [WebColor11] Button color - Vivid blue
+#define COLOR_BUTTON_HOVER          "#0e70a4"    // [WebColor12] Button color when hovered over - Dark blue
+#define COLOR_BUTTON_RESET          "#d43535"    // [WebColor13] Restart/Reset/Delete button color - Strong red
+#define COLOR_BUTTON_RESET_HOVER    "#931f1f"    // [WebColor14] Restart/Reset/Delete button color when hovered over - Dark red
+#define COLOR_BUTTON_SAVE           "#47c266"    // [WebColor15] Save button color - Moderate lime green
+#define COLOR_BUTTON_SAVE_HOVER     "#5aaf6f"    // [WebColor16] Save button color when hovered over - Dark moderate lime green
+#define COLOR_TIMER_TAB_TEXT        "#fff"       // [WebColor17] Config timer tab text color - White
+#define COLOR_TIMER_TAB_BACKGROUND  "#999"       // [WebColor18] Config timer tab background color - Dark gray
+#define COLOR_TITLE_TEXT            "#000"       // [WebColor19] Title text color - Whiteish
 */
 // AIS Dark theme
 // webcolor {"webcolor":["#eee","#181818","#4f4f4f","#000","#ddd","#6a9955","#1e1e1e"]}
