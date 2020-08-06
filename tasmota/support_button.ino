@@ -291,7 +291,8 @@ void ButtonHandler(void)
           if (Button.window_timer[button_index]) {
             Button.window_timer[button_index]--;
           } else {
-            if (!restart_flag && !Button.hold_timer[button_index] && (Button.press_counter[button_index] > 0) && (Button.press_counter[button_index] < 7)) {
+            // ais 13
+            if (!restart_flag && !Button.hold_timer[button_index] && (Button.press_counter[button_index] > 0) && (Button.press_counter[button_index] < 13)) {
 
               bool single_press = false;
               if (Button.press_counter[button_index] < 3) {  // Single or Double press
