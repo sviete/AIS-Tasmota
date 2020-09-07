@@ -43,6 +43,8 @@ keywords if then else endif, or, and are better readable for beginners (others m
 
 #define SCRIPT_DEBUG 0
 
+#define FORMAT_SPIFFS_IF_FAILED true
+
 
 #ifndef MAXVARS
 #define MAXVARS 50
@@ -78,11 +80,13 @@ uint32_t DecodeLightId(uint32_t hue_id);
 #undef EEP_SCRIPT_SIZE
 #undef USE_SCRIPT_COMPRESSION
 #if USE_SCRIPT_FATFS==-1
+
 #ifdef ESP32
-#error "script fat file option -1 currently not supported for ESP32"
+#pragma message "script fat file option -1 used"
 #else
 #pragma message "script fat file option -1 used"
 #endif
+
 #else
 #pragma message "script fat file SDC option used"
 #endif
@@ -152,7 +156,11 @@ void Script_ticker4_end(void) {
 #if defined(LITTLEFS_SCRIPT_SIZE) || (USE_SCRIPT_FATFS==-1)
 #ifdef ESP32
 #include "FS.h"
+#ifdef LITTLEFS_SCRIPT_SIZE
 #include "SPIFFS.h"
+#else
+#include "FFat.h"
+#endif
 #else
 #include <LittleFS.h>
 #endif
@@ -168,15 +176,15 @@ void SaveFile(const char *name,const uint8_t *buf,uint32_t len) {
   file.close();
 }
 
-#define FORMAT_SPIFFS_IF_FAILED true
+
 uint8_t fs_mounted=0;
 
 void LoadFile(const char *name,uint8_t *buf,uint32_t len) {
   if (!fs_mounted) {
 #ifdef ESP32
-    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
+    if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
 #else
-    if(!fsp->begin()){
+    if (!fsp->begin()) {
 #endif
           //Serial.println("SPIFFS Mount Failed");
       return;
@@ -292,11 +300,34 @@ struct T_INDEX {
 };
 
 struct M_FILT {
+#ifdef LARGE_ARRAYS
+  uint16_t numvals;
+  uint16_t index;
+#else
   uint8_t numvals;
   uint8_t index;
+#endif // LARGE_ARRAYS
   float maccu;
   float rbuff[1];
 };
+
+
+#ifdef LARGE_ARRAYS
+#undef AND_FILT_MASK
+#undef OR_FILT_MASK
+#define AND_FILT_MASK 0x7fff
+#define OR_FILT_MASK 0x8000
+#undef MAX_ARRAY_SIZE
+#define MAX_ARRAY_SIZE 1000
+#else
+#undef AND_FILT_MASK
+#undef OR_FILT_MASK
+#define AND_FILT_MASK 0x7f
+#define OR_FILT_MASK 0x80
+#undef MAX_ARRAY_SIZE
+#define MAX_ARRAY_SIZE 127
+#endif
+
 
 typedef union {
   uint8_t data;
@@ -388,9 +419,9 @@ WiFiUDP Script_PortUdp;
 
 #ifndef USE_DEVICE_GROUPS
 char * IPAddressToString(const IPAddress& ip_address) {
-  static char buffer[16];
-  sprintf_P(buffer, PSTR("%u.%u.%u.%u"), ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
-  return buffer;
+  static char ipbuffer[16];
+  sprintf_P(ipbuffer, PSTR("%u.%u.%u.%u"), ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
+  return ipbuffer;
 }
 #endif
 #endif
@@ -453,6 +484,8 @@ void RulesTeleperiod(void) {
 
 #define SCRIPT_SKIP_SPACES while (*lp==' ' || *lp=='\t') lp++;
 #define SCRIPT_SKIP_EOL while (*lp==SCRIPT_EOL) lp++;
+
+float *Get_MFAddr(uint8_t index,uint16_t *len,uint16_t *ipos);
 
 // allocates all variables and presets them
 int16_t Init_Scripter(void) {
@@ -535,12 +568,16 @@ char *script;
                 if ((*lp=='m' || *lp=='M') && *(lp+1)==':') {
                     uint8_t flg=*lp;
                     lp+=2;
+                    if (*lp=='p' && *(lp+1)==':') {
+                      vtypes[vars].bits.is_permanent=1;
+                      lp+=2;
+                    }
                     if (flg=='M') mfilt[numflt].numvals=8;
                     else mfilt[numflt].numvals=5;
                     vtypes[vars].bits.is_filter=1;
                     mfilt[numflt].index=0;
                     if (flg=='M') {
-                      mfilt[numflt].numvals|=0x80;
+                      mfilt[numflt].numvals|=OR_FILT_MASK;
                     }
                     vtypes[vars].index=numflt;
                     numflt++;
@@ -579,9 +616,13 @@ char *script;
                       while (*op==' ') op++;
                       if (isdigit(*op)) {
                         // lenght define follows
-                        uint8_t flen=atoi(op);
-                        mfilt[numflt-1].numvals&=0x80;
-                        mfilt[numflt-1].numvals|=flen&0x7f;
+                        uint16_t flen=atoi(op);
+                        if (flen>MAX_ARRAY_SIZE) {
+                          // limit array size
+                          flen=MAX_ARRAY_SIZE;
+                        }
+                        mfilt[numflt-1].numvals&=OR_FILT_MASK;
+                        mfilt[numflt-1].numvals|=flen&AND_FILT_MASK;
                       }
                     }
 
@@ -627,11 +668,11 @@ char *script;
 
     uint16_t fsize=0;
     for (count=0; count<numflt; count++) {
-      fsize+=sizeof(struct M_FILT)+((mfilt[count].numvals&0x7f)-1)*sizeof(float);
+      fsize+=sizeof(struct M_FILT)+((mfilt[count].numvals&AND_FILT_MASK)-1)*sizeof(float);
     }
 
     // now copy vars to memory
-    uint16_t script_mem_size=
+    uint32_t script_mem_size=
     // number and number shadow vars
     (sizeof(float)*nvars)+
     (sizeof(float)*nvars)+
@@ -725,7 +766,7 @@ char *script;
     for (count=0; count<numflt; count++) {
       struct M_FILT *mflp=(struct M_FILT*)mp;
       mflp->numvals=mfilt[count].numvals;
-      mp+=sizeof(struct M_FILT)+((mfilt[count].numvals&0x7f)-1)*sizeof(float);
+      mp+=sizeof(struct M_FILT)+((mfilt[count].numvals&AND_FILT_MASK)-1)*sizeof(float);
     }
 
     glob_script_mem.numvars=vars;
@@ -752,12 +793,21 @@ char *script;
     for (uint8_t count=0; count<glob_script_mem.numvars; count++) {
       if (vtp[count].bits.is_permanent && !vtp[count].bits.is_string) {
         uint8_t index=vtp[count].index;
-        if (!isnan(*fp)) {
-          glob_script_mem.fvars[index]=*fp;
+        if (vtp[count].bits.is_filter) {
+            // preset array
+            uint16_t len=0;
+            float *fa=Get_MFAddr(index,&len,0);
+            while (len--) {
+              *fa++=*fp++;
+            }
         } else {
-          *fp=glob_script_mem.fvars[index];
+          if (!isnan(*fp)) {
+            glob_script_mem.fvars[index]=*fp;
+          } else {
+            *fp=glob_script_mem.fvars[index];
+          }
+          fp++;
         }
-        fp++;
       }
     }
     sp=(char*)fp;
@@ -776,11 +826,20 @@ char *script;
     if (!glob_script_mem.script_sd_found) {
 
 #if USE_SCRIPT_FATFS>=0
+    // user sd card
       fsp=&SD;
       if (SD.begin(USE_SCRIPT_FATFS)) {
 #else
+    // use flash file
+#ifdef ESP32
+    //  if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+      if (FFat.begin(true)) {
+#else
       if (fsp->begin()) {
 #endif
+
+#endif // USE_SCRIPT_FATFS>=0
+
         glob_script_mem.script_sd_found=1;
       } else {
         glob_script_mem.script_sd_found=0;
@@ -930,7 +989,7 @@ void ws2812_set_array(float *array ,uint32_t len, uint32_t offset) {
 
 
 
-float median_array(float *array,uint8_t len) {
+float median_array(float *array,uint16_t len) {
     uint8_t ind[len];
     uint8_t mind=0,index=0,flg;
     float min=FLT_MAX;
@@ -958,45 +1017,48 @@ float median_array(float *array,uint8_t len) {
 }
 
 
-float *Get_MFAddr(uint8_t index,uint8_t *len,uint8_t *ipos) {
+float *Get_MFAddr(uint8_t index,uint16_t *len,uint16_t *ipos) {
   *len=0;
   uint8_t *mp=(uint8_t*)glob_script_mem.mfilt;
   for (uint8_t count=0; count<MAXFILT; count++) {
     struct M_FILT *mflp=(struct M_FILT*)mp;
     if (count==index) {
-        *len=mflp->numvals&0x7f;
+        *len=mflp->numvals&AND_FILT_MASK;
         if (ipos) *ipos=mflp->index;
         return mflp->rbuff;
     }
-    mp+=sizeof(struct M_FILT)+((mflp->numvals&0x7f)-1)*sizeof(float);
+    mp+=sizeof(struct M_FILT)+((mflp->numvals&AND_FILT_MASK)-1)*sizeof(float);
   }
   return 0;
 }
 
 
-float Get_MFVal(uint8_t index,uint8_t bind) {
+float Get_MFVal(uint8_t index,int16_t bind) {
   uint8_t *mp=(uint8_t*)glob_script_mem.mfilt;
   for (uint8_t count=0; count<MAXFILT; count++) {
     struct M_FILT *mflp=(struct M_FILT*)mp;
     if (count==index) {
-        uint8_t maxind=mflp->numvals&0x7f;
+        uint16_t maxind=mflp->numvals&AND_FILT_MASK;
         if (!bind) {
           return mflp->index;
+        }
+        if (bind<0) {
+          return maxind;
         }
         if (bind<1 || bind>maxind) bind=maxind;
         return mflp->rbuff[bind-1];
     }
-    mp+=sizeof(struct M_FILT)+((mflp->numvals&0x7f)-1)*sizeof(float);
+    mp+=sizeof(struct M_FILT)+((mflp->numvals&AND_FILT_MASK)-1)*sizeof(float);
   }
   return 0;
 }
 
-void Set_MFVal(uint8_t index,uint8_t bind,float val) {
+void Set_MFVal(uint8_t index,uint16_t bind,float val) {
   uint8_t *mp=(uint8_t*)glob_script_mem.mfilt;
   for (uint8_t count=0; count<MAXFILT; count++) {
     struct M_FILT *mflp=(struct M_FILT*)mp;
     if (count==index) {
-        uint8_t maxind=mflp->numvals&0x7f;
+        uint16_t maxind=mflp->numvals&AND_FILT_MASK;
         if (!bind) {
           mflp->index=val;
         } else {
@@ -1005,7 +1067,7 @@ void Set_MFVal(uint8_t index,uint8_t bind,float val) {
         }
         return;
     }
-    mp+=sizeof(struct M_FILT)+((mflp->numvals&0x7f)-1)*sizeof(float);
+    mp+=sizeof(struct M_FILT)+((mflp->numvals&AND_FILT_MASK)-1)*sizeof(float);
   }
 }
 
@@ -1015,15 +1077,15 @@ float Get_MFilter(uint8_t index) {
   for (uint8_t count=0; count<MAXFILT; count++) {
     struct M_FILT *mflp=(struct M_FILT*)mp;
     if (count==index) {
-      if (mflp->numvals&0x80) {
+      if (mflp->numvals&OR_FILT_MASK) {
         // moving average
-        return mflp->maccu/(mflp->numvals&0x7f);
+        return mflp->maccu/(mflp->numvals&AND_FILT_MASK);
       } else {
         // median, sort array indices
         return median_array(mflp->rbuff,mflp->numvals);
       }
     }
-    mp+=sizeof(struct M_FILT)+((mflp->numvals&0x7f)-1)*sizeof(float);
+    mp+=sizeof(struct M_FILT)+((mflp->numvals&AND_FILT_MASK)-1)*sizeof(float);
   }
   return 0;
 }
@@ -1033,13 +1095,13 @@ void Set_MFilter(uint8_t index, float invar) {
   for (uint8_t count=0; count<MAXFILT; count++) {
     struct M_FILT *mflp=(struct M_FILT*)mp;
     if (count==index) {
-      if (mflp->numvals&0x80) {
+      if (mflp->numvals&OR_FILT_MASK) {
         // moving average
         mflp->maccu-=mflp->rbuff[mflp->index];
         mflp->maccu+=invar;
         mflp->rbuff[mflp->index]=invar;
         mflp->index++;
-        if (mflp->index>=(mflp->numvals&0x7f)) mflp->index=0;
+        if (mflp->index>=(mflp->numvals&AND_FILT_MASK)) mflp->index=0;
       } else {
         // median
         mflp->rbuff[mflp->index]=invar;
@@ -1048,7 +1110,7 @@ void Set_MFilter(uint8_t index, float invar) {
       }
       break;
     }
-    mp+=sizeof(struct M_FILT)+((mflp->numvals&0x7f)-1)*sizeof(float);
+    mp+=sizeof(struct M_FILT)+((mflp->numvals&AND_FILT_MASK)-1)*sizeof(float);
   }
 }
 
@@ -1491,6 +1553,34 @@ chknext:
           lp=GetStringResult(lp+4,OPER_EQU,str,0);
           fvar=str[0];
           lp++;
+          len=0;
+          goto exit;
+        }
+        if (!strncmp(vname,"adc(",4)) {
+          lp=GetNumericResult(lp+4,OPER_EQU,&fvar,0);
+          while (*lp==' ') lp++;
+          float fvar1=1;
+          if (*lp!=')') {
+            lp=GetNumericResult(lp,OPER_EQU,&fvar1,0);
+            if (fvar1<32 || fvar1>39) fvar1 = 32;
+          }
+          lp++;
+          if (fvar > 7) fvar = 7;
+#ifdef ESP32
+          // ESP32
+#ifdef USE_ADC
+          fvar=AdcRead(fvar1, fvar);
+#else
+          fvar=999.999;
+#endif // USE_ADC
+#else
+          // ESP8266
+#ifndef USE_ADC_VCC
+          fvar=AdcRead(fvar);
+#else
+          fvar=(float)ESP.getVcc()/1000.0;
+#endif // USE_ADC_VCC
+#endif // ESP32
           len=0;
           goto exit;
         }
@@ -2095,7 +2185,7 @@ chknext:
               }
             } else {
               if (index>glob_script_mem.si_num) {
-                fvar=glob_script_mem.si_num;
+                index=glob_script_mem.si_num;
               }
               strlcpy(str,glob_script_mem.last_index_string+(index*glob_script_mem.max_ssize),glob_script_mem.max_ssize);
             }
@@ -2248,14 +2338,16 @@ chknext:
           len++;
           goto exit;
         }
-        if (!strncmp(vname,"pn[",3)) {
-          GetNumericResult(vname+3,OPER_EQU,&fvar,0);
-//          fvar=pin_gpio[(uint8_t)fvar];
-          fvar=Pin(fvar);
-          // skip ] bracket
+#if  defined(ESP32) && (defined(USE_I2S_AUDIO) || defined(USE_TTGO_WATCH))
+        if (!strncmp(vname,"pl(",3)) {
+          char path[SCRIPT_MAXSSIZE];
+          lp=GetStringResult(lp+3,OPER_EQU,path,0);
+          Play_mp3(path);
           len++;
+          len=0;
           goto exit;
         }
+#endif // USE_I2S_AUDIO
         if (!strncmp(vname,"pd[",3)) {
           GetNumericResult(vname+3,OPER_EQU,&fvar,0);
           uint8_t gpiopin=fvar;
@@ -2444,6 +2536,17 @@ chknext:
           len=0;
           goto strexit;
         }
+#if  defined(ESP32) && (defined(USE_I2S_AUDIO) || defined(USE_TTGO_WATCH))
+        if (!strncmp(vname,"say(",4)) {
+          char text[SCRIPT_MAXSSIZE];
+          lp=GetStringResult(lp+4,OPER_EQU,text,0);
+          Say(text);
+          len++;
+          len=0;
+          goto exit;
+        }
+#endif // USE_I2S_AUDIO
+
 #ifdef ESP32
         if (!strncmp(vname,"sf(",3)) {
           lp+=2;
@@ -2452,6 +2555,16 @@ chknext:
           if (fvar>240) fvar=240;
           setCpuFrequencyMhz(fvar);
           fvar=getCpuFrequencyMhz();
+          lp++;
+          len=0;
+          goto exit;
+        }
+#endif
+#ifdef USE_TTGO_WATCH
+        if (!strncmp(vname,"slp(",4)) {
+          lp=GetNumericResult(lp+4,OPER_EQU,&fvar,0);
+          SCRIPT_SKIP_SPACES
+          TTGO_Sleep(fvar);
           lp++;
           len=0;
           goto exit;
@@ -2623,7 +2736,7 @@ chknext:
           if (index<1 || index>MAXBUTTONS) index=1;
           index--;
           if (buttons[index]) {
-            fvar=buttons[index]->vpower&0x80;
+            fvar=buttons[index]->vpower.on_off;
           } else {
             fvar=-1;
           }
@@ -2726,6 +2839,26 @@ chknext:
           goto exit;
         }
 #endif //ESP32, USE_WEBCAM
+#if defined(USE_TTGO_WATCH) && defined(USE_BMA423)
+        if (!strncmp(vname,"wdclk",5)) {
+          fvar=TTGO_doubleclick();
+          goto exit;
+        }
+        if (!strncmp(vname,"wbut",4)) {
+          fvar=TTGO_button();
+          goto exit;
+        }
+#endif // USE_TTGO_WATCH
+#if defined(USE_TTGO_WATCH) && defined(USE_FT5206)
+        if (!strncmp(vname,"wtch(",5)) {
+          lp=GetNumericResult(lp+5,OPER_EQU,&fvar,0);
+          fvar=Touch_Status(fvar);
+          lp++;
+          len=0;
+          goto exit;
+        }
+#endif // USE_FT5206
+
         if (!strncmp(vname,"wday",4)) {
           fvar=RtcTime.day_of_week;
           goto exit;
@@ -3273,7 +3406,7 @@ exit:
 
 
 exit10:
-#if SCRIPT_DEBUG>0
+#if IFTHEN_DEBUG>0
   char tbuff[128];
   sprintf(tbuff,"p1=%d,p2=%d,cmpres=%d,and_or=%d line: ",(int32_t)*dfvar,(int32_t)fvar1,*result,and_or);
   toLogEOL(tbuff,llp);
@@ -3342,7 +3475,7 @@ int16_t Run_Scripter(const char *type, int8_t tlen, char *js) {
 int16_t Run_script_sub(const char *type, int8_t tlen, JsonObject *jo) {
     uint8_t vtype=0,sindex,xflg,floop=0,globvindex,fromscriptcmd=0;
     char *lp_next;
-    int8_t globaindex,saindex;
+    int16_t globaindex,saindex;
     struct T_INDEX ind;
     uint8_t operand,lastop,numeric=1,if_state[IF_NEST],if_exe[IF_NEST],if_result[IF_NEST],and_or,ifstck=0;
     if_state[ifstck]=0;
@@ -3569,7 +3702,7 @@ int16_t Run_script_sub(const char *type, int8_t tlen, JsonObject *jo) {
             if (!if_exe[ifstck] && if_state[ifstck]!=1) goto next_line;
 
 #ifdef IFTHEN_DEBUG
-            sdtoff(tbuff,"stack=%d,exe=%d,state=%d,cmpres=%d execute line: ",ifstck,if_exe[ifstck],if_state[ifstck],if_result[ifstck]);
+            sprintf(tbuff,"stack=%d,exe=%d,state=%d,cmpres=%d execute line: ",ifstck,if_exe[ifstck],if_state[ifstck],if_result[ifstck]);
             toLogEOL(tbuff,lp);
 #endif
 
@@ -3590,7 +3723,22 @@ int16_t Run_script_sub(const char *type, int8_t tlen, JsonObject *jo) {
               // number precision
               glob_script_mem.script_dprec=atoi(lp);
               goto next_line;
-            } else if (!strncmp(lp,"delay(",6)) {
+            }
+#ifdef USE_DISPLAY
+            else if (!strncmp(lp,"dt",2)) {
+              char dstbuf[256];
+              lp+=2;
+              SCRIPT_SKIP_SPACES
+              Replace_Cmd_Vars(lp,1,dstbuf,sizeof(dstbuf));
+              char *savptr = XdrvMailbox.data;
+              XdrvMailbox.data = dstbuf;
+              XdrvMailbox.data_len = 0;
+              DisplayText();
+              XdrvMailbox.data = savptr;
+              goto next_line;
+            }
+#endif
+            else if (!strncmp(lp,"delay(",6)) {
               lp+=5;
               // delay
               lp=GetNumericResult(lp,OPER_EQU,&fvar,0);
@@ -3659,7 +3807,7 @@ int16_t Run_script_sub(const char *type, int8_t tlen, JsonObject *jo) {
                 if ((vtype&STYPE)==0) {
                     // numeric result
                   if (glob_script_mem.type[ind.index].bits.is_filter) {
-                    uint8_t len=0;
+                    uint16_t len=0;
                     float *fa=Get_MFAddr(index,&len,0);
                     //Serial.printf(">> 2 %d\n",(uint32_t)*fa);
                     if (fa && len) ws2812_set_array(fa,len,fvar);
@@ -4072,12 +4220,26 @@ void Scripter_save_pvars(void) {
   for (uint8_t count=0; count<glob_script_mem.numvars; count++) {
     if (vtp[count].bits.is_permanent && !vtp[count].bits.is_string) {
       uint8_t index=vtp[count].index;
-      mlen+=sizeof(float);
-      if (mlen>PMEM_SIZE) {
-        vtp[count].bits.is_permanent=0;
-        return;
+      if (vtp[count].bits.is_filter) {
+        // save array
+        uint16_t len=0;
+        float *fa=Get_MFAddr(index,&len,0);
+        mlen+=sizeof(float)*len;
+        if (mlen>glob_script_mem.script_pram_size) {
+          vtp[count].bits.is_permanent=0;
+          return;
+        }
+        while (len--) {
+          *fp++=*fa++;
+        }
+      } else {
+        mlen+=sizeof(float);
+        if (mlen>glob_script_mem.script_pram_size) {
+          vtp[count].bits.is_permanent=0;
+          return;
+        }
+        *fp++=glob_script_mem.fvars[index];
       }
-      *fp++=glob_script_mem.fvars[index];
     }
   }
   char *cp=(char*)fp;
@@ -4087,7 +4249,7 @@ void Scripter_save_pvars(void) {
       char *sp=glob_script_mem.glob_snp+(index*glob_script_mem.max_ssize);
       uint8_t slen=strlen(sp);
       mlen+=slen+1;
-      if (mlen>PMEM_SIZE) {
+      if (mlen>glob_script_mem.script_pram_size) {
         vtp[count].bits.is_permanent=0;
         return;
       }
@@ -4415,6 +4577,7 @@ char path[48];
 
 void Script_FileUploadConfiguration(void) {
   uint8_t depth=0;
+
   strcpy(path,"/");
 
   if (!HttpCheckPriviledgedAccess()) { return; }
@@ -4464,7 +4627,12 @@ void script_upload(void) {
   HTTPUpload& upload = Webserver->upload();
   if (upload.status == UPLOAD_FILE_START) {
     char npath[48];
+#if defined(ESP32) && defined(USE_SCRIPT_FATFS) && USE_SCRIPT_FATFS==-1
+    //sprintf(npath,"/%s",upload.filename.c_str());
     sprintf(npath,"%s/%s",path,upload.filename.c_str());
+#else
+    sprintf(npath,"%s/%s",path,upload.filename.c_str());
+#endif
     fsp->remove(npath);
     upload_file=fsp->open(npath,FILE_WRITE);
     if (!upload_file) Web.upload_error=1;
@@ -5291,6 +5459,23 @@ bool ScriptCommand(void) {
           execute_script(XdrvMailbox.data);
         }
       }
+      if ('?' == XdrvMailbox.data[0]) {
+        char *lp=XdrvMailbox.data;
+        lp++;
+        while (*lp==' ') lp++;
+        float fvar;
+        char str[SCRIPT_MAXSSIZE];
+        glob_script_mem.glob_error=0;
+        GetNumericResult(lp,OPER_EQU,&fvar,0);
+        if (glob_script_mem.glob_error==1) {
+          // was string, not number
+          GetStringResult(lp,OPER_EQU,str,0);
+          snprintf_P (mqtt_data, sizeof(mqtt_data), PSTR("{\"script\":{\"%s\":\"%s\"}}"),lp,str);
+        } else {
+          dtostrfd(fvar,6,str);
+          snprintf_P (mqtt_data, sizeof(mqtt_data), PSTR("{\"script\":{\"%s\":%s}}"),lp,str);
+        }
+      }
       return serviced;
     }
     snprintf_P (mqtt_data, sizeof(mqtt_data), PSTR("{\"%s\":\"%s\",\"Free\":%d}"),command, GetStateText(bitRead(Settings.rule_enabled,0)),glob_script_mem.script_size-strlen(glob_script_mem.script_ram));
@@ -5606,31 +5791,53 @@ const char HTTP_SCRIPT_MIMES[] PROGMEM =
   "Content-type: %s\r\n\r\n";
 
 void ScriptGetSDCard(void) {
+
   if (!HttpCheckPriviledgedAccess()) { return; }
 
   String stmp = Webserver->uri();
-  char *cp=strstr(stmp.c_str(),"/sdc/");
+  char *cp=strstr_P(stmp.c_str(),PSTR("/sdc/"));
 //  if (cp) Serial.printf(">>>%s\n",cp);
   if (cp) {
 #ifdef ESP32
-    cp+=4
+    cp+=4;
 #else
     cp+=5;
 #endif
-    if (fsp->exists(cp)) {
+    if (strstr_P(cp,PSTR("scrdmp.bmp"))) {
       SendFile(cp);
       return;
+    } else {
+      if (fsp->exists(cp)) {
+        SendFile(cp);
+        return;
+      }
     }
   }
   HandleNotFound();
 }
 
+extern uint8_t *buffer;
+
 void SendFile(char *fname) {
 char buff[512];
   const char *mime;
+  uint8_t sflg=0;
   char *jpg=strstr(fname,".jpg");
   if (jpg) {
     mime="image/jpeg";
+  }
+
+#ifdef USE_DISPLAY_DUMP
+  char *sbmp=strstr_P(fname,PSTR("scrdmp.bmp"));
+  if (sbmp) {
+    mime="image/bmp";
+    sflg=1;
+  }
+#endif // USE_DISPLAY_DUMP
+
+  char *bmp=strstr(fname,".bmp");
+  if (bmp) {
+    mime="image/bmp";
   }
   char *html=strstr(fname,".html");
   if (html) {
@@ -5643,18 +5850,57 @@ char buff[512];
 
   WSContentSend_P(HTTP_SCRIPT_MIMES,fname,mime);
 
-
-  File file=fsp->open(fname,FILE_READ);
-  uint32_t siz = file.size();
-  uint32_t len=sizeof(buff);
-  while (siz > 0) {
+  if (sflg) {
+#ifdef USE_DISPLAY_DUMP
+    // screen copy
+    #define fileHeaderSize 14
+    #define infoHeaderSize 40
+    if (buffer) {
+      uint8_t *bp=buffer;
+      uint8_t *lbuf=(uint8_t*)calloc(Settings.display_width+2,3);
+      uint8_t *lbp;
+      uint8_t fileHeader[fileHeaderSize];
+      createBitmapFileHeader(Settings.display_height , Settings.display_width , fileHeader);
+      Webserver->client().write((uint8_t *)fileHeader, fileHeaderSize);
+      uint8_t infoHeader[infoHeaderSize];
+      createBitmapInfoHeader(Settings.display_height, Settings.display_width, infoHeader );
+      Webserver->client().write((uint8_t *)infoHeader, infoHeaderSize);
+      for (uint32_t lins=0; lins<Settings.display_height; lins++) {
+        lbp=lbuf+(Settings.display_width*3);
+        for (uint32_t cols=0; cols<Settings.display_width; cols+=8) {
+          uint8_t bits=0x80;
+          while (bits) {
+            if (!((*bp)&bits)) {
+              *--lbp=0xff;
+              *--lbp=0xff;
+              *--lbp=0xff;
+            } else {
+              *--lbp=0;
+              *--lbp=0;
+              *--lbp=0;
+            }
+            bits=bits>>1;
+          }
+          bp++;
+        }
+        Webserver->client().write((const char*)lbuf, Settings.display_width*3);
+      }
+      if (lbuf) free(lbuf);
+      Webserver->client().stop();
+    }
+#endif // USE_DISPLAY_DUMP
+  } else {
+    File file=fsp->open(fname,FILE_READ);
+    uint32_t siz = file.size();
+    uint32_t len=sizeof(buff);
+    while (siz > 0) {
       if (len>siz) len=siz;
       file.read((uint8_t *)buff,len );
       Webserver->client().write((const char*)buff, len);
       siz -= len;
+    }
+    file.close();
   }
-  file.close();
-
   Webserver->client().stop();
 }
 #endif // USE_SCRIPT_FATFS
@@ -5826,6 +6072,9 @@ const char SCRIPT_MSG_GOPT4[] PROGMEM =
 const char SCRIPT_MSG_GOPT5[] PROGMEM =
 "new Date(0,1,1,%d,%d)";
 
+const char SCRIPT_MSG_GOPT6[] PROGMEM =
+"title:'%s',isStacked:false,vAxis:{viewWindow:{min:%d,max:%d}}%s";
+
 const char SCRIPT_MSG_GTE1[] PROGMEM = "'%s'";
 
 #define GLIBS_MAIN 1<<0
@@ -5835,11 +6084,11 @@ const char SCRIPT_MSG_GTE1[] PROGMEM = "'%s'";
 
 #define MAX_GARRAY 4
 
-char *gc_get_arrays(char *lp, float **arrays, uint8_t *ranum, uint8_t *rentries, uint8_t *ipos) {
+char *gc_get_arrays(char *lp, float **arrays, uint8_t *ranum, uint16_t *rentries, uint16_t *ipos) {
 struct T_INDEX ind;
 uint8_t vtype;
-uint8 entries=0;
-uint8_t cipos=0;
+uint16 entries=0;
+uint16_t cipos=0;
 
   uint8_t anum=0;
   while (anum<MAX_GARRAY) {
@@ -5855,9 +6104,9 @@ uint8_t cipos=0;
         //Serial.printf("numeric %d - %d \n",ind.index,index);
         if (glob_script_mem.type[ind.index].bits.is_filter) {
           //Serial.printf("numeric array\n");
-          uint8_t len=0;
+          uint16_t len=0;
           float *fa=Get_MFAddr(index,&len,&cipos);
-          //Serial.printf(">> 2 %d\n",(uint32_t)*fa);
+          //Serial.printf(">> 2 %d\n",len);
           if (fa && len>=entries) {
             if (!entries) {
               entries = len;
@@ -6108,12 +6357,12 @@ void ScriptWebShow(char mc) {
 
           } else {
             if (mc=='w') {
-              WSContentSend_PD(PSTR("%s"),tmp);
+              WSContentSend_PD(PSTR("%s"),lin);
             } else {
               if (optflg) {
-                WSContentSend_PD(PSTR("<div>%s</div>"),tmp);
+                WSContentSend_PD(PSTR("<div>%s</div>"),lin);
               } else {
-                WSContentSend_PD(PSTR("{s}%s{e}"),tmp);
+                WSContentSend_PD(PSTR("{s}%s{e}"),lin);
               }
             }
           }
@@ -6201,8 +6450,8 @@ exgc:
 
               float *arrays[MAX_GARRAY];
               uint8_t anum=0;
-              uint8 entries=0;
-              uint8 ipos=0;
+              uint16_t entries=0;
+              uint16_t ipos=0;
               lp=gc_get_arrays(lp, &arrays[0], &anum, &entries, &ipos);
 
               if (anum>nanum) {
@@ -6247,10 +6496,19 @@ exgc:
                 lp=GetStringResult(lp,OPER_EQU,label,0);
                 SCRIPT_SKIP_SPACES
 
-                int8_t todflg=-1;
+                int16_t divflg=1;
+                int16_t todflg=-1;
                 if (!strncmp(label,"cnt",3)) {
                   todflg=atoi(&label[3]);
                   if (todflg>=entries) todflg=entries-1;
+                } else {
+                  uint16 segments=1;
+                  for (uint32_t cnt=0; cnt<strlen(label); cnt++) {
+                    if (label[cnt]=='|') {
+                      segments++;
+                    }
+                  }
+                  divflg=entries/segments;
                 }
 
                 uint32_t aind=ipos;
@@ -6265,7 +6523,7 @@ exgc:
                       todflg=0;
                     }
                   } else {
-                    GetTextIndexed(lbl, sizeof(lbl), aind, label);
+                    GetTextIndexed(lbl, sizeof(lbl), aind/divflg, label);
                   }
                   WSContentSend_PD(lbl);
                   WSContentSend_PD("',");
@@ -6308,6 +6566,17 @@ exgc:
                   lp=GetNumericResult(lp,OPER_EQU,&max2,0);
                   SCRIPT_SKIP_SPACES
                   snprintf_P(options,sizeof(options),SCRIPT_MSG_GOPT3,header,(uint32_t)max1,(uint32_t)max2,func);
+                } else {
+                  SCRIPT_SKIP_SPACES
+                  if (*lp!=')') {
+                    float max1;
+                    lp=GetNumericResult(lp,OPER_EQU,&max1,0);
+                    SCRIPT_SKIP_SPACES
+                    float max2;
+                    lp=GetNumericResult(lp,OPER_EQU,&max2,0);
+                    SCRIPT_SKIP_SPACES
+                    snprintf_P(options,sizeof(options),SCRIPT_MSG_GOPT6,header,(uint32_t)max1,(uint32_t)max2,func);
+                  }
                 }
 
                 if (ctype=='g') {
@@ -6580,6 +6849,7 @@ uint32_t call2https(const char *host, const char *path) {
     }
   }
   httpsClient->stop();
+  delete httpsClient;
   Run_Scripter(">jp",3,(char*)result.c_str());
   return 0;
 }
@@ -6677,13 +6947,21 @@ bool Xdrv10(uint8_t function)
       fsp = &SD;
       if (SD.begin(USE_SCRIPT_FATFS)) {
 #else
+    // flash file system
+#ifdef ESP32
+      //fsp = &SPIFFS;
+      //if (SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+      fsp=&FFat;
+      if (FFat.begin(true)) {
+#else
         // fs on flash
       fsp = &LittleFS;
       if (fsp->begin()) {
+#endif // ESP
+
 #endif // USE_SCRIPT_FATFS>=0
-
+        AddLog_P(LOG_LEVEL_INFO,PSTR("FATFS mount OK!"));
         //fsp->dateTimeCallback(dateTime);
-
         glob_script_mem.script_sd_found=1;
         char *script;
         script=(char*)calloc(FAT_SCRIPT_SIZE+4,1);
@@ -6703,6 +6981,7 @@ bool Xdrv10(uint8_t function)
         glob_script_mem.flags=1;
 
       } else {
+        AddLog_P(LOG_LEVEL_INFO,PSTR("FATFS mount failed!"));
         glob_script_mem.script_sd_found=0;
       }
 #endif // USE_SCRIPT_FATFS
