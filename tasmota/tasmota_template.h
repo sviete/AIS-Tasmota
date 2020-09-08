@@ -2214,7 +2214,10 @@ const mytmplt kModules8285[TMP_MAXMODULE_8266 - TMP_WEMOS] PROGMEM = {
 #endif  // ESP8266
 
 #ifdef ESP32
+// AIS FIX FOR CAM
+// #include "tasmota_template_ESP32-AIS.h"
 #include "tasmota_template_ESP32.h"
+
 #endif  // ESP32
 
 #endif  // _TASMOTA_TEMPLATE_H_

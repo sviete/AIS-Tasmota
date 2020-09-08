@@ -154,45 +154,68 @@ uint32_t WcSetup(int32_t fsiz) {
   config.pixel_format = PIXFORMAT_JPEG;
 //  config.pixel_format = PIXFORMAT_GRAYSCALE;
 //  config.pixel_format = PIXFORMAT_RGB565;
+  
+  AddLog_P2(LOG_LEVEL_INFO, PSTR("CAM: MODULE: %d"), Settings.module);
+  if (Settings.module == ESP32_CAM_AIS){
+      config.pin_d0 = 34;
+      config.pin_d1 = 13;
+      config.pin_d2 = 14;
+      config.pin_d3 = 35;
+      config.pin_d4 = 39;
+      config.pin_d5 = 38;
+      config.pin_d6 = 37;
+      config.pin_d7 = 36;
+      config.pin_xclk = 4;
+      config.pin_pclk = 25;
+      config.pin_vsync = 5;
+      config.pin_href = 27;
+      config.pin_sscb_sda = 18;
+      config.pin_sscb_scl = 23;
+      config.pin_pwdn = -1;
+      config.pin_reset = -1;
 
-  if (WcPinUsed()) {
-    config.pin_d0 = Pin(GPIO_WEBCAM_DATA);        // Y2_GPIO_NUM;
-    config.pin_d1 = Pin(GPIO_WEBCAM_DATA, 1);     // Y3_GPIO_NUM;
-    config.pin_d2 = Pin(GPIO_WEBCAM_DATA, 2);     // Y4_GPIO_NUM;
-    config.pin_d3 = Pin(GPIO_WEBCAM_DATA, 3);     // Y5_GPIO_NUM;
-    config.pin_d4 = Pin(GPIO_WEBCAM_DATA, 4);     // Y6_GPIO_NUM;
-    config.pin_d5 = Pin(GPIO_WEBCAM_DATA, 5);     // Y7_GPIO_NUM;
-    config.pin_d6 = Pin(GPIO_WEBCAM_DATA, 6);     // Y8_GPIO_NUM;
-    config.pin_d7 = Pin(GPIO_WEBCAM_DATA, 7);     // Y9_GPIO_NUM;
-    config.pin_xclk = Pin(GPIO_WEBCAM_XCLK);      // XCLK_GPIO_NUM;
-    config.pin_pclk = Pin(GPIO_WEBCAM_PCLK);      // PCLK_GPIO_NUM;
-    config.pin_vsync = Pin(GPIO_WEBCAM_VSYNC);    // VSYNC_GPIO_NUM;
-    config.pin_href = Pin(GPIO_WEBCAM_HREF);      // HREF_GPIO_NUM;
-    config.pin_sscb_sda = Pin(GPIO_WEBCAM_SIOD);  // SIOD_GPIO_NUM;
-    config.pin_sscb_scl = Pin(GPIO_WEBCAM_SIOC);  // SIOC_GPIO_NUM;
-    config.pin_pwdn = (PinUsed(GPIO_WEBCAM_PWDN)) ? Pin(GPIO_WEBCAM_PWDN) : -1;     // PWDN_GPIO_NUM;
-    config.pin_reset = (PinUsed(GPIO_WEBCAM_RESET)) ? Pin(GPIO_WEBCAM_RESET) : -1;  // RESET_GPIO_NUM;
-
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("CAM: User template"));
+      AddLog_P2(LOG_LEVEL_INFO, PSTR("CAM AIS MODULE no: %d"), Settings.module);
   } else {
-    // defaults to AI THINKER
-    config.pin_d0 = Y2_GPIO_NUM;
-    config.pin_d1 = Y3_GPIO_NUM;
-    config.pin_d2 = Y4_GPIO_NUM;
-    config.pin_d3 = Y5_GPIO_NUM;
-    config.pin_d4 = Y6_GPIO_NUM;
-    config.pin_d5 = Y7_GPIO_NUM;
-    config.pin_d6 = Y8_GPIO_NUM;
-    config.pin_d7 = Y9_GPIO_NUM;
-    config.pin_xclk = XCLK_GPIO_NUM;
-    config.pin_pclk = PCLK_GPIO_NUM;
-    config.pin_vsync = VSYNC_GPIO_NUM;
-    config.pin_href = HREF_GPIO_NUM;
-    config.pin_sscb_sda = SIOD_GPIO_NUM;
-    config.pin_sscb_scl = SIOC_GPIO_NUM;
-    config.pin_pwdn = PWDN_GPIO_NUM;
-    config.pin_reset = RESET_GPIO_NUM;
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("CAM: Default template"));
+    if (WcPinUsed()) {
+      config.pin_d0 = Pin(GPIO_WEBCAM_DATA);        // Y2_GPIO_NUM;
+      config.pin_d1 = Pin(GPIO_WEBCAM_DATA, 1);     // Y3_GPIO_NUM;
+      config.pin_d2 = Pin(GPIO_WEBCAM_DATA, 2);     // Y4_GPIO_NUM;
+      config.pin_d3 = Pin(GPIO_WEBCAM_DATA, 3);     // Y5_GPIO_NUM;
+      config.pin_d4 = Pin(GPIO_WEBCAM_DATA, 4);     // Y6_GPIO_NUM;
+      config.pin_d5 = Pin(GPIO_WEBCAM_DATA, 5);     // Y7_GPIO_NUM;
+      config.pin_d6 = Pin(GPIO_WEBCAM_DATA, 6);     // Y8_GPIO_NUM;
+      config.pin_d7 = Pin(GPIO_WEBCAM_DATA, 7);     // Y9_GPIO_NUM;
+      config.pin_xclk = Pin(GPIO_WEBCAM_XCLK);      // XCLK_GPIO_NUM;
+      config.pin_pclk = Pin(GPIO_WEBCAM_PCLK);      // PCLK_GPIO_NUM;
+      config.pin_vsync = Pin(GPIO_WEBCAM_VSYNC);    // VSYNC_GPIO_NUM;
+      config.pin_href = Pin(GPIO_WEBCAM_HREF);      // HREF_GPIO_NUM;
+      config.pin_sscb_sda = Pin(GPIO_WEBCAM_SIOD);  // SIOD_GPIO_NUM;
+      config.pin_sscb_scl = Pin(GPIO_WEBCAM_SIOC);  // SIOC_GPIO_NUM;
+      config.pin_pwdn = (PinUsed(GPIO_WEBCAM_PWDN)) ? Pin(GPIO_WEBCAM_PWDN) : -1;     // PWDN_GPIO_NUM;
+      config.pin_reset = (PinUsed(GPIO_WEBCAM_RESET)) ? Pin(GPIO_WEBCAM_RESET) : -1;  // RESET_GPIO_NUM;
+
+      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("CAM: User template"));
+    } else {
+      // defaults to AI THINKER
+      config.pin_d0 = Y2_GPIO_NUM;
+      config.pin_d1 = Y3_GPIO_NUM;
+      config.pin_d2 = Y4_GPIO_NUM;
+      config.pin_d3 = Y5_GPIO_NUM;
+      config.pin_d4 = Y6_GPIO_NUM;
+      config.pin_d5 = Y7_GPIO_NUM;
+      config.pin_d6 = Y8_GPIO_NUM;
+      config.pin_d7 = Y9_GPIO_NUM;
+      config.pin_xclk = XCLK_GPIO_NUM;
+      config.pin_pclk = PCLK_GPIO_NUM;
+      config.pin_vsync = VSYNC_GPIO_NUM;
+      config.pin_href = HREF_GPIO_NUM;
+      config.pin_sscb_sda = SIOD_GPIO_NUM;
+      config.pin_sscb_scl = SIOC_GPIO_NUM;
+      config.pin_pwdn = PWDN_GPIO_NUM;
+      config.pin_reset = RESET_GPIO_NUM;
+
+      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("CAM: Default template"));
+    }
   }
 
   //ESP.getPsramSize()
