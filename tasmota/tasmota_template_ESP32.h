@@ -660,14 +660,14 @@ typedef struct MYTMPLT {
 
 /********************************************************************************************/
 // Supported hardware modules
-enum SupportedModules { WEMOS, ESP32_CAM_AITHINKER, MAXMODULE };
+enum SupportedModules { WEMOS, ESP32_CAM_AITHINKER, ESP32_CAM_AIS, MAXMODULE };
 
 #define USER_MODULE        255
 
-const char kModuleNames[] PROGMEM = "ESP32-DevKit|ESP32 Cam AiThinker";
+const char kModuleNames[] PROGMEM = "ESP32-DevKit|ESP32 Cam AiThinker|ESP32 AIS Cam";
 
 // Default module settings
-const uint8_t kModuleNiceList[MAXMODULE] PROGMEM = { WEMOS, ESP32_CAM_AITHINKER };
+const uint8_t kModuleNiceList[MAXMODULE] PROGMEM = { WEMOS, ESP32_CAM_AITHINKER, ESP32_CAM_AIS };
 
 const mytmplt kModules PROGMEM =
 {                              // WEMOS - Espressif ESP32-DevKitC - Any ESP32 device like WeMos and NodeMCU hardware (ESP32)
