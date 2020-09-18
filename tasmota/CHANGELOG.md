@@ -1,6 +1,6 @@
 ## Released
 
-### 8.5.0 20200907
+### 8.5.0 20200909
 
 - Release Hannah
 
@@ -8,6 +8,7 @@
 
 ### 8.4.0.3 20200823
 
+- Fix energy total counters (#9263, #9266)
 - Change references from http://thehackbox.org/tasmota/ to http://ota.tasmota.com/tasmota/
 - Add command ``PowerDelta1`` to ``PowerDelta3`` to trigger on up to three phases (#9134)
 - Add Zigbee web ui widget for Lights

@@ -47,6 +47,8 @@ The following binary downloads have been compiled with ESP8266/Arduino library c
 - **tasmota-zbbridge.bin** = The dedicated Sonoff Zigbee Bridge version.
 - **tasmota-minimal.bin** = The Minimal version allows intermediate OTA uploads to support larger versions and does NOT change any persistent parameter. This version **should NOT be used for initial installation**.
 
+The attached binaries can also be downloaded from http://ota.tasmota.com/tasmota/release for ESP8266 or http://ota.tasmota.com/tasmota32/release for ESP32. The links can be used for OTA upgrades too like ``OtaUrl http://ota.tasmota.com/tasmota/release/tasmota.bin``
+
 [List](MODULES.md) of embedded modules.
 
 [Complete list](BUILDS.md) of available feature and sensors.
@@ -61,6 +63,7 @@ The following binary downloads have been compiled with ESP8266/Arduino library c
 - Change White blend mode to using command ``SetOption 105`` instead of ``RGBWWTable``
 - Fix ESP32 PWM range
 - Fix display power control (#9114)
+- Fix energy total counters (#9263, #9266)
 - Add command ``SetOption102 0/1`` to set Baud rate for Teleinfo communication (0 = 1200 or 1 = 9600)
 - Add command ``SetOption103 0/1`` to set TLS mode when TLS is selected
 - Add command ``SetOption104 1`` to disable all MQTT retained messages
