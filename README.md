@@ -14,6 +14,7 @@ _Written for PlatformIO_
 [![Chat](https://img.shields.io/discord/479389167382691863.svg)](https://discord.gg/Ks2Kzd4)
 [![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/arendst/Tasmota.svg)](http://isitmaintained.com/project/arendst/Tasmota "Average time to resolve an issue")
 [![Percentage of issues still open](http://isitmaintained.com/badge/open/arendst/Tasmota.svg)](http://isitmaintained.com/project/arendst/Tasmota "Percentage of issues still open")
+[![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/arendst/Tasmota)
 
 If you like **Tasmota**, give it a star, or fork it and contribute!
 
@@ -27,7 +28,7 @@ In addition to the [release webpage](https://github.com/arendst/Tasmota/releases
 
 ## Development
 
-[![Dev Version](https://img.shields.io/badge/development%20version-v8.5.x.x-blue.svg)](https://github.com/arendst/Tasmota)
+[![Dev Version](https://img.shields.io/badge/development%20version-v9.0.x.x-blue.svg)](https://github.com/arendst/Tasmota)
 [![Download Dev](https://img.shields.io/badge/download-development-yellow.svg)](http://ota.tasmota.com/tasmota/)
 [![Tasmota CI](https://github.com/arendst/Tasmota/workflows/Tasmota%20CI/badge.svg)](https://github.com/arendst/Tasmota/actions?query=workflow%3A%22Tasmota+CI%22)
 [![Tasmota ESP32 CI](https://github.com/arendst/Tasmota/workflows/Tasmota%20ESP32%20CI/badge.svg)](https://github.com/arendst/Tasmota/actions?query=workflow%3A%22Tasmota+ESP32+CI%22)
