@@ -445,7 +445,8 @@ void WifiCheckIp(void)
           AddLog_P(LOG_LEVEL_INFO, S_LOG_WIFI, PSTR(D_CONNECT_FAILED_AP_TIMEOUT));
           Settings.wifi_channel = 0;  // Disable stored AP
         } else {
-          if (!strlen(SettingsText(SET_STASSID1)) && !strlen(SettingsText(SET_STASSID2))) {
+          // AIS - WIFI_MANAGER if no SET_STASSID1
+          if (!strlen(SettingsText(SET_STASSID1))) {
             Settings.wifi_channel = 0;  // Disable stored AP
             wifi_config_tool = WIFI_MANAGER;  // Skip empty SSIDs and start Wifi config tool
             Wifi.retry = 0;
