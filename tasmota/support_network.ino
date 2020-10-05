@@ -29,9 +29,10 @@ struct {
 void MqttDiscoverServer(void) {
   AddLog_P2(LOG_LEVEL_INFO, "AIS EASY: Wykrywam MQTT Host dla bramki: %s", mqtt_client);
   HTTPClient http;
-  http.begin(AIS_URL);
-  http.setAuthorization(AIS_USER, AIS_PASS);
+  http.begin(AIS_WS_URL);
+  http.setAuthorization(AIS_WS_USER, AIS_WS_PASS);
   http.addHeader("id", String(mqtt_client));
+  http.addHeader("ip", WiFi.localIP().toString().c_str());
   int httpCode = http.POST("");
   if (httpCode > 0) {
     String line = http.getString();
@@ -51,9 +52,9 @@ void MqttDiscoverServer(void) {
             if (token != ""){
               SettingsUpdateText(SET_MQTT_PWD, token.c_str());
             }
-            AddLog_P2(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki wykryty %s", line.substring(s+7, e).c_str());
+            AddLog_P2(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki wykryty");
           } else {
-            AddLog_P2(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki %s NIE wykryty %s, obecny MQTT host %s.", SettingsText(SET_MQTT_USER), line.substring(s+9, e).c_str(), SettingsText(SET_MQTT_HOST));
+            AddLog_P2(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki %s NIE wykryty.", SettingsText(SET_MQTT_USER));
           }
         } else {
           snprintf_P(log_data, sizeof(log_data), line.c_str());

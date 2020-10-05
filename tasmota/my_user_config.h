@@ -36,7 +36,7 @@
  * Users are advised to use the user_config_override.h file for most changes.
 \*********************************************************************************************/
 
-#define USE_CONFIG_OVERRIDE                      // Uncomment to use user_config_override.h file. See README.md
+// #define USE_CONFIG_OVERRIDE                      // Uncomment to use user_config_override.h file. See README.md
 
 /*********************************************************************************************\
  * SECTION 1
@@ -93,7 +93,7 @@
 #define MQTT_LOG_LEVEL         LOG_LEVEL_NONE    // [MqttLog] (LOG_LEVEL_NONE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_DEBUG_MORE)
 
 // -- Ota -----------------------------------------
-#define OTA_URL                "http://ai-speaker.com/ota/s20"  // [OtaUrl]
+#define OTA_URL                "http://ai-speaker.com/ota/dom/public_device.bin"  // [OtaUrl]
 #define OTA_COMPATIBILITY      false             // [SetOption78] Disable OTA compatibility check
 
 // -- MQTT ----------------------------------------
@@ -641,7 +641,7 @@
 //#define USE_OPENTHERM                            // Add support for OpenTherm (+15k code)
 
 // -- Power monitoring sensors --------------------
-#define USE_ENERGY_MARGIN_DETECTION              // Add support for Energy Margin detection (+1k6 code)
+// #define USE_ENERGY_MARGIN_DETECTION              // Add support for Energy Margin detection (+1k6 code)
   #define USE_ENERGY_POWER_LIMIT                 // Add additional support for Energy Power Limit detection (+1k2 code)
 #define USE_PZEM004T                             // Add support for PZEM004T Energy monitor (+2k code)
 #define USE_PZEM_AC                              // Add support for PZEM014,016 Energy monitor (+1k1 code)
@@ -695,7 +695,7 @@
   #define USE_IR_SEND_RC5                        // Support IRsend Philips RC5 protocol
   #define USE_IR_SEND_RC6                        // Support IRsend Philips RC6 protocol
 
-  #define USE_IR_RECEIVE                         // Support for IR receiver (+7k2 code, 264 iram)
+ // #define USE_IR_RECEIVE                         // Support for IR receiver (+7k2 code, 264 iram)
     #define IR_RCV_BUFFER_SIZE      100          // Max number of packets allowed in capture buffer (default 100 (*2 bytes ram))
     #define IR_RCV_TIMEOUT          15           // Number of milli-Seconds of no-more-data before we consider a message ended (default 15)
     #define IR_RCV_MIN_UNKNOWN_SIZE 6            // Set the smallest sized "UNKNOWN" message packets we actually care about (default 6, max 255)
@@ -847,10 +847,14 @@
 #endif
 
 // AIS
-#ifndef AIS_URL
-#define AIS_URL "http://ai-speaker.com/ords/dom/dom/get_connection_settings_for_device_public"
-#define AIS_USER ""
-#define AIS_PASS ""
+#ifndef AIS_WS_URL
+  #define AIS_WS_URL "http://ai-speaker.com/ords/dom/dom/get_connection_settings_for_device_public"
+#endif
+#ifndef AIS_WS_USER
+  #define AIS_WS_USER ""
+#endif
+#ifndef AIS_WS_PASS
+  #define AIS_WS_PASS ""
 #endif
 
 #endif  // _MY_USER_CONFIG_H_
