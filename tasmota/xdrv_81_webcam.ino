@@ -168,27 +168,26 @@ uint32_t WcSetup(int32_t fsiz) {
 //  config.pixel_format = PIXFORMAT_GRAYSCALE;
 //  config.pixel_format = PIXFORMAT_RGB565;
   
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("CAM: MODULE: %d"), Settings.module);
-  if (Settings.module == ESP32_CAM_AIS){
-      config.pin_d0 = 34;
-      config.pin_d1 = 13;
-      config.pin_d2 = 14;
-      config.pin_d3 = 35;
-      config.pin_d4 = 39;
-      config.pin_d5 = 38;
-      config.pin_d6 = 37;
-      config.pin_d7 = 36;
-      config.pin_xclk = 4;
-      config.pin_pclk = 25;
-      config.pin_vsync = 5;
-      config.pin_href = 27;
-      config.pin_sscb_sda = 18;
-      config.pin_sscb_scl = 23;
-      config.pin_pwdn = -1;
-      config.pin_reset = -1;
-
-      AddLog_P2(LOG_LEVEL_INFO, PSTR("CAM AIS MODULE no: %d"), Settings.module);
-  } else {
+  // AddLog_P2(LOG_LEVEL_INFO, PSTR("CAM: MODULE: %d"), Settings.module);
+  // if (ESP32_CAM_AIS == Settings.module){
+  //     config.pin_d0 = 34;
+  //     config.pin_d1 = 13;
+  //     config.pin_d2 = 14;
+  //     config.pin_d3 = 35;
+  //     config.pin_d4 = 39;
+  //     config.pin_d5 = 38;
+  //     config.pin_d6 = 37;
+  //     config.pin_d7 = 36;
+  //     config.pin_xclk = 4;
+  //     config.pin_pclk = 25;
+  //     config.pin_vsync = 5;
+  //     config.pin_href = 27;
+  //     config.pin_sscb_sda = 18;
+  //     config.pin_sscb_scl = 23;
+  //     config.pin_pwdn = -1;
+  //     config.pin_reset = -1;
+  //     AddLog_P2(LOG_LEVEL_INFO, PSTR("CAM AIS MODULE no: %d"), Settings.module);
+  // } else {
     if (WcPinUsed()) {
       config.pin_d0 = Pin(GPIO_WEBCAM_DATA);        // Y2_GPIO_NUM;
       config.pin_d1 = Pin(GPIO_WEBCAM_DATA, 1);     // Y3_GPIO_NUM;
@@ -229,7 +228,7 @@ uint32_t WcSetup(int32_t fsiz) {
 
       AddLog_P2(LOG_LEVEL_DEBUG, PSTR("CAM: Default template"));
     }
-  }
+ // }
 
   //ESP.getPsramSize()
 
