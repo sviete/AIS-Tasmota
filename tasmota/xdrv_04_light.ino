@@ -129,7 +129,7 @@ enum LightSchemes { LS_POWER, LS_WAKEUP, LS_CYCLEUP, LS_CYCLEDN, LS_RANDOM, LS_M
 const uint8_t LIGHT_COLOR_SIZE = 25;   // Char array scolor size
 
 const char kLightCommands[] PROGMEM = "|"  // No prefix
-  D_CMND_COLOR "|" D_CMND_COLORTEMPERATURE "|" D_CMND_DIMMER "|" D_CMND_DIMMER_RANGE "|" D_CMND_LEDTABLE "|" D_CMND_FADE "|"
+  D_CMND_COLOR "|" D_CMND_COLORTEMPERATURE "|" D_CMND_DIMMER "|" D_CMND_DIMMER_RANGE "|" D_CMND_DIMMER_STEP "|" D_CMND_LEDTABLE "|" D_CMND_FADE "|"
   D_CMND_RGBWWTABLE "|" D_CMND_SCHEME "|" D_CMND_SPEED "|" D_CMND_WAKEUP "|" D_CMND_WAKEUPDURATION "|"
   D_CMND_WHITE "|" D_CMND_CHANNEL "|" D_CMND_HSBCOLOR
 #ifdef USE_LIGHT_PALETTE
@@ -141,7 +141,7 @@ const char kLightCommands[] PROGMEM = "|"  // No prefix
    "|UNDOCA" ;
 
 void (* const LightCommand[])(void) PROGMEM = {
-  &CmndColor, &CmndColorTemperature, &CmndDimmer, &CmndDimmerRange, &CmndLedTable, &CmndFade,
+  &CmndColor, &CmndColorTemperature, &CmndDimmer, &CmndDimmerRange, &CmndDimmerStep, &CmndLedTable, &CmndFade,
   &CmndRgbwwTable, &CmndScheme, &CmndSpeed, &CmndWakeup, &CmndWakeupDuration,
   &CmndWhite, &CmndChannel, &CmndHsbColor,
 #ifdef USE_LIGHT_PALETTE
@@ -278,7 +278,7 @@ struct LIGHT {
   uint8_t fixed_color_index = 1;
   uint8_t pwm_offset = 0;                 // Offset in color buffer
   uint8_t max_scheme = LS_MAX -1;
-  
+
   uint32_t wakeup_start_time = 0;
 
   bool update = true;
@@ -564,9 +564,6 @@ class LightStateClass {
 #ifdef DEBUG_LIGHT
       AddLog_P2(LOG_LEVEL_DEBUG_MORE, "LightStateClass::setBri RGB raw (%d %d %d) HS (%d %d) bri (%d)", _r, _g, _b, _hue, _sat, _briRGB);
 #endif
-#ifdef USE_PWM_DIMMER
-  if (PWM_DIMMER == my_module_type) PWMDimmerSetBrightnessLeds(0);
-#endif  // USE_PWM_DIMMER
     }
 
     // changes the RGB brightness alone
@@ -574,6 +571,9 @@ class LightStateClass {
       uint8_t prev_bri = _briRGB;
       _briRGB = bri_rgb;
       if (bri_rgb > 0) { addRGBMode(); }
+#ifdef USE_PWM_DIMMER
+      if (PWM_DIMMER == TasmotaGlobal.module_type) PWMDimmerSetBrightnessLeds(-1);
+#endif  // USE_PWM_DIMMER
       return prev_bri;
     }
 
@@ -582,6 +582,9 @@ class LightStateClass {
       uint8_t prev_bri = _briCT;
       _briCT = bri_ct;
       if (bri_ct > 0) { addCTMode(); }
+#ifdef USE_PWM_DIMMER
+      if (PWM_DIMMER == TasmotaGlobal.module_type) PWMDimmerSetBrightnessLeds(-1);
+#endif  // USE_PWM_DIMMER
       return prev_bri;
     }
 
@@ -970,7 +973,7 @@ public:
       Settings.light_color[0], Settings.light_color[1], Settings.light_color[2],
       Settings.light_color[3], Settings.light_color[4], Settings.light_dimmer);
     AddLog_P2(LOG_LEVEL_DEBUG_MORE, "LightControllerClass::loadSettings light_type/sub (%d %d)",
-      light_type, Light.subtype);
+      TasmotaGlobal.light_type, Light.subtype);
 #endif
     if (_pwm_multi_channels) {
       _state->setChannelsRaw(Settings.light_color);
@@ -1243,57 +1246,64 @@ void LightPwmOffset(uint32_t offset)
 
 bool LightModuleInit(void)
 {
-  light_type = LT_BASIC;                    // Use basic PWM control if SetOption15 = 0
+  TasmotaGlobal.light_type = LT_BASIC;                    // Use basic PWM control if SetOption15 = 0
 
   if (Settings.flag.pwm_control) {          // SetOption15 - Switch between commands PWM or COLOR/DIMMER/CT/CHANNEL
     for (uint32_t i = 0; i < MAX_PWMS; i++) {
-      if (PinUsed(GPIO_PWM1, i)) { light_type++; }  // Use Dimmer/Color control for all PWM as SetOption15 = 1
+      if (PinUsed(GPIO_PWM1, i)) { TasmotaGlobal.light_type++; }  // Use Dimmer/Color control for all PWM as SetOption15 = 1
     }
   }
 
-  light_flg = 0;
+  TasmotaGlobal.light_driver = 0;
   if (XlgtCall(FUNC_MODULE_INIT)) {
     // serviced
   }
 #ifdef ESP8266
-  else if (SONOFF_BN == my_module_type) {   // PWM Single color led (White)
-    light_type = LT_PWM1;
+  else if (SONOFF_BN == TasmotaGlobal.module_type) {   // PWM Single color led (White)
+    TasmotaGlobal.light_type = LT_PWM1;
   }
-  else if (SONOFF_LED == my_module_type) {  // PWM Dual color led (White warm and cold)
-    if (!my_module.io[4]) {                 // Fix Sonoff Led instabilities
+  else if (SONOFF_LED == TasmotaGlobal.module_type) {  // PWM Dual color led (White warm and cold)
+    if (!TasmotaGlobal.my_module.io[4]) {                 // Fix Sonoff Led instabilities
       pinMode(4, OUTPUT);                   // Stop floating outputs
       digitalWrite(4, LOW);
     }
-    if (!my_module.io[5]) {
+    if (!TasmotaGlobal.my_module.io[5]) {
       pinMode(5, OUTPUT);                   // Stop floating outputs
       digitalWrite(5, LOW);
     }
-    if (!my_module.io[14]) {
+    if (!TasmotaGlobal.my_module.io[14]) {
       pinMode(14, OUTPUT);                  // Stop floating outputs
       digitalWrite(14, LOW);
     }
-    light_type = LT_PWM2;
+    TasmotaGlobal.light_type = LT_PWM2;
   }
 #endif  // ESP8266
+#ifdef USE_PWM_DIMMER
+#ifdef USE_DEVICE_GROUPS
+  else if (PWM_DIMMER == TasmotaGlobal.module_type) {
+    TasmotaGlobal.light_type = Settings.pwm_dimmer_cfg.pwm_count + 1;
+  }
+#endif  // USE_DEVICE_GROUPS
+#endif  // USE_PWM_DIMMER
 
-  if (light_type > LT_BASIC) {
-    devices_present++;
+  if (TasmotaGlobal.light_type > LT_BASIC) {
+    TasmotaGlobal.devices_present++;
   }
 
   // post-process for lights
-  uint32_t pwm_channels = (light_type & 7) > LST_MAX ? LST_MAX : (light_type & 7);
+  uint32_t pwm_channels = (TasmotaGlobal.light_type & 7) > LST_MAX ? LST_MAX : (TasmotaGlobal.light_type & 7);
   if (Settings.flag3.pwm_multi_channels) {  // SetOption68 - Enable multi-channels PWM instead of Color PWM
     if (0 == pwm_channels) { pwm_channels = 1; }
-    devices_present += pwm_channels - 1;    // add the pwm channels controls at the end
+    TasmotaGlobal.devices_present += pwm_channels - 1;    // add the pwm channels controls at the end
   } else if ((Settings.param[P_RGB_REMAP] & 128) && (LST_RGBW <= pwm_channels)) {
     // if RGBW or RGBCW, and SetOption37 >= 128, we manage RGB and W separately, hence adding a device
-    devices_present++;
+    TasmotaGlobal.devices_present++;
   } else if ((Settings.flag4.virtual_ct) && (LST_RGBW == pwm_channels)) {
     Light.virtual_ct = true;    // enabled
-    light_type++;               // create an additional virtual 5th channel
+    TasmotaGlobal.light_type++;               // create an additional virtual 5th channel
   }
 
-  return (light_type > LT_BASIC);
+  return (TasmotaGlobal.light_type > LT_BASIC);
 }
 
 // compute actual PWM min/max values from DimmerRange
@@ -1323,8 +1333,8 @@ void LightInit(void)
     Settings.rgbwwTable[4] = 255;       // set RGBWWTable value to its default
   }
 
-  Light.device = devices_present;
-  Light.subtype = (light_type & 7) > LST_MAX ? LST_MAX : (light_type & 7); // Always 0 - LST_MAX (5)
+  Light.device = TasmotaGlobal.devices_present;
+  Light.subtype = (TasmotaGlobal.light_type & 7) > LST_MAX ? LST_MAX : (TasmotaGlobal.light_type & 7); // Always 0 - LST_MAX (5)
   Light.pwm_multi_channels = Settings.flag3.pwm_multi_channels;  // SetOption68 - Enable multi-channels PWM instead of Color PWM
 
   if (LST_RGBW <= Light.subtype) {
@@ -1337,15 +1347,15 @@ void LightInit(void)
   if ((LST_SINGLE <= Light.subtype) && Light.pwm_multi_channels) {
     // we treat each PWM channel as an independant one, hence we switch to
     light_controller.setPWMMultiChannel(true);
-    Light.device = devices_present - Light.subtype + 1; // adjust if we also have relays
+    Light.device = TasmotaGlobal.devices_present - Light.subtype + 1; // adjust if we also have relays
   } else if (!light_controller.isCTRGBLinked()) {
     // if RGBW or RGBCW, and SetOption37 >= 128, we manage RGB and W separately
     Light.device--;   // we take the last two devices as lights
   }
   LightCalcPWMRange();
 #ifdef DEBUG_LIGHT
-  AddLog_P2(LOG_LEVEL_DEBUG_MORE, "LightInit Light.pwm_multi_channels=%d Light.subtype=%d Light.device=%d devices_present=%d",
-    Light.pwm_multi_channels, Light.subtype, Light.device, devices_present);
+  AddLog_P2(LOG_LEVEL_DEBUG_MORE, "LightInit Light.pwm_multi_channels=%d Light.subtype=%d Light.device=%d TasmotaGlobal.devices_present=%d",
+    Light.pwm_multi_channels, Light.subtype, Light.device, TasmotaGlobal.devices_present);
 #endif
 
   light_controller.setSubType(Light.subtype);
@@ -1356,8 +1366,8 @@ void LightInit(void)
   if (LST_SINGLE == Light.subtype) {
     Settings.light_color[0] = 255;      // One channel only supports Dimmer but needs max color
   }
-  if (light_type < LT_PWM6) {           // PWM
-    for (uint32_t i = 0; i < light_type; i++) {
+  if (TasmotaGlobal.light_type < LT_PWM6) {           // PWM
+    for (uint32_t i = 0; i < TasmotaGlobal.light_type; i++) {
       Settings.pwm_value[i] = 0;        // Disable direct PWM control
       if (PinUsed(GPIO_PWM1, i)) {
 #ifdef ESP8266
@@ -1385,6 +1395,9 @@ void LightInit(void)
   Light.power = 0;
   Light.update = true;
   Light.wakeup_active = 0;
+  if (0 == Settings.light_wakeup) {
+    Settings.light_wakeup = 60;         // Fix divide by zero exception 0 in Animate
+  }
   if (Settings.flag4.fade_at_startup) {
     Light.fade_initialized = true;      // consider fade intialized starting from black
   }
@@ -1444,7 +1457,7 @@ void LightHsToRgb(uint16_t hue, uint8_t sat, uint8_t *r_r, uint8_t *r_g, uint8_t
 uint8_t LightGetBri(uint8_t device) {
   uint8_t bri = 254;   // default value if relay
   if (Light.pwm_multi_channels) {
-    if ((device >= Light.device) && (device < Light.device + LST_MAX) && (device <= devices_present)) {
+    if ((device >= Light.device) && (device < Light.device + LST_MAX) && (device <= TasmotaGlobal.devices_present)) {
       bri = Light.current_color[device - Light.device];
     }
   } else if (light_controller.isCTRGBLinked()) {   // standard behavior
@@ -1464,7 +1477,7 @@ uint8_t LightGetBri(uint8_t device) {
 // If SetOption68 is set, set the brightness for a specific device
 void LightSetBri(uint8_t device, uint8_t bri) {
   if (Light.pwm_multi_channels) {
-    if ((device >= Light.device) && (device < Light.device + LST_MAX) && (device <= devices_present)) {
+    if ((device >= Light.device) && (device < Light.device + LST_MAX) && (device <= TasmotaGlobal.devices_present)) {
       Light.current_color[device - Light.device] = bri;
       light_controller.changeChannels(Light.current_color);
     }
@@ -1655,7 +1668,7 @@ void ResponseLightState(uint8_t append)
 
 void LightPreparePower(power_t channels = 0xFFFFFFFF) {    // 1 = only RGB, 2 = only CT, 3 = both RGB and CT
 #ifdef DEBUG_LIGHT
-  AddLog_P2(LOG_LEVEL_DEBUG, "LightPreparePower power=%d Light.power=%d", power, Light.power);
+  AddLog_P2(LOG_LEVEL_DEBUG, "LightPreparePower power=%d Light.power=%d", TasmotaGlobal.power, Light.power);
 #endif
   // If multi-channels, then we only switch off channels with a value of zero
   if (Light.pwm_multi_channels) {
@@ -1718,9 +1731,9 @@ void LightPreparePower(power_t channels = 0xFFFFFFFF) {    // 1 = only RGB, 2 = 
   }
 
 #ifdef DEBUG_LIGHT
-  AddLog_P2(LOG_LEVEL_DEBUG, "LightPreparePower End power=%d Light.power=%d", power, Light.power);
+  AddLog_P2(LOG_LEVEL_DEBUG, "LightPreparePower End power=%d Light.power=%d", TasmotaGlobal.power, Light.power);
 #endif
-  Light.power = power >> (Light.device - 1);  // reset next state, works also with unlinked RGB/CT
+  Light.power = TasmotaGlobal.power >> (Light.device - 1);  // reset next state, works also with unlinked RGB/CT
   ResponseLightState(0);
 }
 
@@ -1812,10 +1825,10 @@ void LightSetPower(void)
   }
   uint32_t shift = Light.device - 1;
   // If PWM multi_channels
-  // Ex: 3 Relays and 4 PWM - devices_present = 7, Light.device = 4, Light.subtype = 4
+  // Ex: 3 Relays and 4 PWM - TasmotaGlobal.devices_present = 7, Light.device = 4, Light.subtype = 4
   // Result: mask = 0b00001111 = 0x0F, shift = 3.
   // Power bits we consider are: 0b01111000 = 0x78
-  // If regular situation: devices_present == Light.subtype
+  // If regular situation: TasmotaGlobal.devices_present == Light.subtype
   Light.power = (XdrvMailbox.index & (mask << shift)) >> shift;
   if (Light.wakeup_active) {
     Light.wakeup_active--;
@@ -1846,12 +1859,12 @@ void LightAnimate(void)
   // or set a maximum of PWM_MAX_SLEEP if light is on or Fade is running
   if (Light.power || Light.fade_running) {
     if (Settings.sleep > PWM_MAX_SLEEP) {
-      ssleep = PWM_MAX_SLEEP;      // set a maxumum value of 50 milliseconds to ensure that animations are smooth
+      TasmotaGlobal.sleep = PWM_MAX_SLEEP;      // set a maxumum value of 10 milliseconds to ensure that animations are smooth
     } else {
-      ssleep = Settings.sleep;     // or keep the current sleep if it's lower than 50
+      TasmotaGlobal.sleep = Settings.sleep;     // or keep the current sleep if it's lower than 50
     }
   } else {
-    ssleep = Settings.sleep;
+    TasmotaGlobal.sleep = Settings.sleep;
   }
 
   if (!Light.power) {                   // All channels powered off
@@ -2022,7 +2035,7 @@ void LightAnimate(void)
         cur_col_10[i] = orig_col_10bits[Light.color_remap[i]];
       }
 
-      if (!Settings.light_fade || skip_light_fade || power_off || (!Light.fade_initialized)) { // no fade
+      if (!Settings.light_fade || TasmotaGlobal.skip_light_fade || power_off || (!Light.fade_initialized)) { // no fade
         // record the current value for a future Fade
         memcpy(Light.fade_start_10, cur_col_10, sizeof(Light.fade_start_10));
         // push the final values at 8 and 10 bits resolution to the PWMs
@@ -2050,7 +2063,7 @@ void LightAnimate(void)
     }
 #ifdef USE_PWM_DIMMER
     // If the power is off and the fade is done, turn the relay off.
-    if (PWM_DIMMER == my_module_type && !Light.power && !Light.fade_running) PWMDimmerSetPower();
+    if (PWM_DIMMER == TasmotaGlobal.module_type && !Light.power && !Light.fade_running) PWMDimmerSetPower();
 #endif  // USE_PWM_DIMMER
   }
 }
@@ -2059,7 +2072,7 @@ bool isChannelGammaCorrected(uint32_t channel) {
   if (!Settings.light_correction) { return false; }   // Gamma correction not activated
   if (channel >= Light.subtype) { return false; }     // Out of range
 #ifdef ESP8266
-  if ((PHILIPS == my_module_type) || (Settings.flag4.pwm_ct_mode)) {
+  if ((PHILIPS == TasmotaGlobal.module_type) || (Settings.flag4.pwm_ct_mode)) {
     if ((LST_COLDWARM == Light.subtype) && (1 == channel)) { return false; }   // PMW reserved for CT
     if ((LST_RGBCW == Light.subtype) && (4 == channel)) { return false; }   // PMW reserved for CT
   }
@@ -2070,7 +2083,7 @@ bool isChannelGammaCorrected(uint32_t channel) {
 // is the channel a regular PWM or ColorTemp control
 bool isChannelCT(uint32_t channel) {
 #ifdef ESP8266
-  if ((PHILIPS == my_module_type) || (Settings.flag4.pwm_ct_mode)) {
+  if ((PHILIPS == TasmotaGlobal.module_type) || (Settings.flag4.pwm_ct_mode)) {
     if ((LST_COLDWARM == Light.subtype) && (1 == channel)) { return true; }   // PMW reserved for CT
     if ((LST_RGBCW == Light.subtype) && (4 == channel)) { return true; }   // PMW reserved for CT
   }
@@ -2121,9 +2134,9 @@ bool LightApplyFade(void) {   // did the value chanegd and needs to be applied
       if (Settings.save_data) {
         // Also postpone the save_data for the duration of the Fade (in seconds)
         uint32_t delay_seconds = 1 + (Light.fade_duration + 999) / 1000;   // add one more second
-        // AddLog_P2(LOG_LEVEL_INFO, PSTR("delay_seconds %d, save_data_counter %d"), delay_seconds, save_data_counter);
-        if (save_data_counter < delay_seconds) {
-          save_data_counter = delay_seconds;      // pospone
+        // AddLog_P2(LOG_LEVEL_INFO, PSTR("delay_seconds %d, save_data_counter %d"), delay_seconds, TasmotaGlobal.save_data_counter);
+        if (TasmotaGlobal.save_data_counter < delay_seconds) {
+          TasmotaGlobal.save_data_counter = delay_seconds;      // pospone
         }
       }
     } else {
@@ -2194,7 +2207,7 @@ void LightApplyPower(uint8_t new_color[LST_MAX], power_t power) {
 
 void LightSetOutputs(const uint16_t *cur_col_10) {
   // now apply the actual PWM values, adjusted and remapped 10-bits range
-  if (light_type < LT_PWM6) {   // only for direct PWM lights, not for Tuya, Armtronix...
+  if (TasmotaGlobal.light_type < LT_PWM6) {   // only for direct PWM lights, not for Tuya, Armtronix...
     for (uint32_t i = 0; i < (Light.subtype - Light.pwm_offset); i++) {
       if (PinUsed(GPIO_PWM1, i)) {
         //AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "Cur_Col%d 10 bits %d"), i, cur_col_10[i]);
@@ -2203,7 +2216,7 @@ void LightSetOutputs(const uint16_t *cur_col_10) {
           cur_col = cur_col > 0 ? changeUIntScale(cur_col, 0, Settings.pwm_range, Light.pwm_min, Light.pwm_max) : 0;   // shrink to the range of pwm_min..pwm_max
         }
         if (!Settings.flag4.zerocross_dimmer) {
-          analogWrite(Pin(GPIO_PWM1, i), bitRead(pwm_inverted, i) ? Settings.pwm_range - cur_col : cur_col);
+          analogWrite(Pin(GPIO_PWM1, i), bitRead(TasmotaGlobal.pwm_inverted, i) ? Settings.pwm_range - cur_col : cur_col);
         }
       }
     }
@@ -2256,7 +2269,7 @@ void calcGammaBulbs(uint16_t cur_col_10[5]) {
     uint16_t white_bri10_1023 = (white_bri10 > 1023) ? 1023 : white_bri10;    // max 1023
 
 #ifdef ESP8266
-    if ((PHILIPS == my_module_type) || (Settings.flag4.pwm_ct_mode)) {   // channel 1 is the color tone, mapped to cold channel (0..255)
+    if ((PHILIPS == TasmotaGlobal.module_type) || (Settings.flag4.pwm_ct_mode)) {   // channel 1 is the color tone, mapped to cold channel (0..255)
       // Xiaomi Philips bulbs follow a different scheme:
       cur_col_10[cw1] = light_state.getCT10bits();
       // channel 0=intensity, channel1=temperature
@@ -2323,11 +2336,12 @@ void LightHandleDevGroupItem(void)
 {
   static bool send_state = false;
   static bool restore_power = false;
+
+#ifdef USE_PWM_DIMMER_REMOTE
+  if (!(XdrvMailbox.index & DGR_FLAG_LOCAL)) return;
+#endif  // USE_PWM_DIMMER_REMOTE
   bool more_to_come;
   uint32_t value = XdrvMailbox.payload;
-#ifdef USE_PWM_DIMMER_REMOTE
-  if (*XdrvMailbox.topic) return; // Ignore updates from other device groups
-#endif  // USE_PWM_DIMMER_REMOTE
   switch (XdrvMailbox.command_code) {
     case DGR_ITEM_EOL:
       more_to_come = (XdrvMailbox.index & DGR_FLAG_MORE_TO_COME);
@@ -2387,7 +2401,7 @@ void LightHandleDevGroupItem(void)
       send_state = true;
       break;
     case DGR_ITEM_LIGHT_FIXED_COLOR:
-      if (Light.subtype >= LST_RGBW) {
+      if (Light.subtype >= LST_COLDWARM) {
         send_state = true;
 #ifdef USE_LIGHT_PALETTE
         if (Light.palette_count) {
@@ -2396,21 +2410,28 @@ void LightHandleDevGroupItem(void)
           break;
         }
 #endif  // !USE_LIGHT_PALETTE
-        value = value % MAX_FIXED_COLOR;
-        if (value) {
-          bool save_decimal_text = Settings.flag.decimal_text;
-          char str[16];
-          LightColorEntry(str, sprintf_P(str, PSTR("%u"), value));
-          Settings.flag.decimal_text = save_decimal_text;
-          uint32_t old_bri = light_state.getBri();
-          light_controller.changeChannels(Light.entry_color);
-          light_controller.changeBri(old_bri);
-          Settings.light_scheme = 0;
-          Light.devgrp_no_channels_out = false;
+        if (Light.subtype <= LST_COLDWARM) {
+          value = value % (MAX_FIXED_COLD_WARM - 1) + 201;
         }
         else {
-          light_state.setColorMode(LCM_CT);
+          uint32_t max = MAX_FIXED_COLOR;
+          if (Light.subtype >= LST_RGB) {
+            max++;
+            if (Light.subtype >= LST_RGBCW) max += (MAX_FIXED_COLD_WARM - 2);
+          }
+          value = value % max + 1;
+          if (value > MAX_FIXED_COLOR) value += 200 - MAX_FIXED_COLOR;
         }
+        Light.fixed_color_index = value;
+        bool save_decimal_text = Settings.flag.decimal_text;
+        char str[16];
+        LightColorEntry(str, sprintf_P(str, PSTR("%u"), value));
+        Settings.flag.decimal_text = save_decimal_text;
+        uint32_t old_bri = light_state.getBri();
+        light_controller.changeChannels(Light.entry_color);
+        light_controller.changeBri(old_bri);
+        Settings.light_scheme = 0;
+        Light.devgrp_no_channels_out = false;
         if (!restore_power && !Light.power) {
           Light.old_power = Light.power;
           Light.power = 0xff;
@@ -2492,7 +2513,7 @@ bool LightColorEntry(char *buffer, uint32_t buffer_length)
     buffer_length--;  // remove all trailing '='
     memcpy(&Light.entry_color, &Light.current_color, sizeof(Light.entry_color));
   }
-  if (strstr(buffer, ",") != nullptr) {             // Decimal entry
+  if (strchr(buffer, ',') != nullptr) {             // Decimal entry
     int8_t i = 0;
     for (str = strtok_r(buffer, ",", &p); str && i < 6; str = strtok_r(nullptr, ",", &p)) {
       if (i < LST_MAX) {
@@ -2535,9 +2556,12 @@ bool LightColorEntry(char *buffer, uint32_t buffer_length)
       entry_type = 1;                               // Hexadecimal
     }
   }
-  if (entry_type) {
-    Settings.flag.decimal_text = entry_type -1;     // SetOption17 - Switch between decimal or hexadecimal output
-  }
+
+//  Too much magic so removed since 9.0.0.3
+//  if (entry_type) {
+//    Settings.flag.decimal_text = entry_type -1;     // SetOption17 - Switch between decimal or hexadecimal output
+//  }
+
   return (entry_type);
 }
 
@@ -2808,11 +2832,11 @@ void CmndDimmer(void)
   // Dimmer1 0..100 - Change RGB Dimmer
   // Dimmer2 0..100 - Change W(W) Dimmer
   // Dimmer3 0..100 - Change both RGB and W(W) Dimmers with no fading
-  // Dimmer<x> +    - Incerement Dimmer in steps of 10
-  // Dimmer<x> -    - Decrement Dimmer in steps of 10
+  // Dimmer<x> +    - Incerement Dimmer in steps of DimmerStep
+  // Dimmer<x> -    - Decrement Dimmer in steps of DimmerStep
   uint32_t dimmer;
   if (XdrvMailbox.index == 3) {
-    skip_light_fade = true;
+    TasmotaGlobal.skip_light_fade = true;
     XdrvMailbox.index = 0;
   }
   else if (XdrvMailbox.index > 2) {
@@ -2827,9 +2851,9 @@ void CmndDimmer(void)
   // Handle +/- special command
   if (1 == XdrvMailbox.data_len) {
     if ('+' == XdrvMailbox.data[0]) {
-      XdrvMailbox.payload = (dimmer > 89) ? 100 : dimmer + 10;
+      XdrvMailbox.payload = (dimmer > (100 - Settings.dimmer_step - 1)) ? 100 : dimmer + Settings.dimmer_step;
     } else if ('-' == XdrvMailbox.data[0]) {
-      XdrvMailbox.payload = (dimmer < 11) ? 1 : dimmer - 10;
+      XdrvMailbox.payload = (dimmer < (Settings.dimmer_step + 1)) ? 1 : dimmer - Settings.dimmer_step;
     }
   }
   // If value is ok, change it, otherwise report old value
@@ -2857,11 +2881,11 @@ void CmndDimmer(void)
     }
 #endif  // USE_PWM_DIMMER && USE_DEVICE_GROUPS
     Light.update = true;
-    if (skip_light_fade) LightAnimate();
+    if (TasmotaGlobal.skip_light_fade) LightAnimate();
   } else {
     ResponseCmndNumber(dimmer);
   }
-  skip_light_fade = false;
+  TasmotaGlobal.skip_light_fade = false;
 }
 
 void CmndDimmerRange(void)
@@ -2884,6 +2908,22 @@ void CmndDimmerRange(void)
     Light.update = true;
   }
   Response_P(PSTR("{\"" D_CMND_DIMMER_RANGE "\":{\"Min\":%d,\"Max\":%d}}"), Settings.dimmer_hw_min, Settings.dimmer_hw_max);
+}
+
+void CmndDimmerStep(void)
+{
+  // DimmerStep       - Show current dimmer step as used by Dimmer +/-
+  // DimmerStep 1..50 - Set dimmer step
+  if (XdrvMailbox.data_len > 0) {
+    if (XdrvMailbox.payload < 1) {
+       Settings.dimmer_step = 1;
+    } else if (XdrvMailbox.payload > 50) {
+      Settings.dimmer_step = 50;
+    } else {
+      Settings.dimmer_step = XdrvMailbox.payload;
+    }
+  }
+  ResponseCmndNumber(Settings.dimmer_step);
 }
 
 void CmndLedTable(void)
@@ -3072,7 +3112,7 @@ void CmndUndocA(void)
   scolor[6] = '\0';  // RGB only
   Response_P(PSTR("%s,%d,%d,%d,%d,%d"), scolor, Settings.light_fade, Settings.light_correction, Settings.light_scheme, Settings.light_speed, Settings.light_width);
   MqttPublishPrefixTopic_P(STAT, XdrvMailbox.topic);
-  mqtt_data[0] = '\0';
+  ResponseClear();
 }
 
 /*********************************************************************************************\
@@ -3086,7 +3126,7 @@ bool Xdrv04(uint8_t function)
   if (FUNC_MODULE_INIT == function) {
       return LightModuleInit();
   }
-  else if (light_type) {
+  else if (TasmotaGlobal.light_type) {
     switch (function) {
       case FUNC_SERIAL:
         result = XlgtCall(FUNC_SERIAL);

@@ -274,7 +274,7 @@ void WindMeterShow(bool json)
 
 void WindMeterTriggerTele(void)
 {
-  mqtt_data[0] = '\0';
+  ResponseClear();
   if (MqttShowSensor()) {
     MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);
 #ifdef USE_RULES
@@ -294,27 +294,27 @@ bool Xsns68Cmnd(void)
   char sub_string[XdrvMailbox.data_len +1];
   switch (XdrvMailbox.payload) {
     case 1:
-      if (strstr(XdrvMailbox.data, ",") != nullptr) {
+      if (strchr(XdrvMailbox.data, ',') != nullptr) {
         Settings.windmeter_radius = (uint16_t)strtol(subStr(sub_string, XdrvMailbox.data, ",", 2), nullptr, 10);
       }
       break;
     case 2:
-      if (strstr(XdrvMailbox.data, ",") != nullptr) {
+      if (strchr(XdrvMailbox.data, ',') != nullptr) {
         Settings.windmeter_pulses_x_rot = (uint8_t)strtol(subStr(sub_string, XdrvMailbox.data, ",", 2), nullptr, 10);
       }
       break;
     case 3:
-      if (strstr(XdrvMailbox.data, ",") != nullptr) {
+      if (strchr(XdrvMailbox.data, ',') != nullptr) {
         Settings.windmeter_pulse_debounce = (uint16_t)strtol(subStr(sub_string, XdrvMailbox.data, ",", 2), nullptr, 10);
       }
       break;
     case 4:
-      if (strstr(XdrvMailbox.data, ",") != nullptr) {
+      if (strchr(XdrvMailbox.data, ',') != nullptr) {
         Settings.windmeter_speed_factor = (int16_t)(CharToFloat(subStr(sub_string, XdrvMailbox.data, ",", 2)) * 1000);
       }
       break;
     case 5:
-      if (strstr(XdrvMailbox.data, ",") != nullptr) {
+      if (strchr(XdrvMailbox.data, ',') != nullptr) {
         Settings.windmeter_tele_pchange = (uint8_t)strtol(subStr(sub_string, XdrvMailbox.data, ",", 2), nullptr, 10);
       }
       break;

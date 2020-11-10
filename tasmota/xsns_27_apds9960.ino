@@ -86,9 +86,6 @@ const char HTTP_SNS_GESTURE[]     PROGMEM = "{s}%s " D_GESTURE "{m}%s{e}";
 #endif  // USE_APDS9960_GESTURE
 
 #ifdef USE_APDS9960_COLOR
-const char HTTP_SNS_COLOR_RED[]   PROGMEM = "{s}%s " D_COLOR_RED "{m}%u{e}";
-const char HTTP_SNS_COLOR_GREEN[] PROGMEM = "{s}%s " D_COLOR_GREEN "{m}%u{e}";
-const char HTTP_SNS_COLOR_BLUE[]  PROGMEM = "{s}%s " D_COLOR_BLUE "{m}%u{e}";
 const char HTTP_SNS_CCT[]         PROGMEM = "{s}%s " D_CCT "{m}%u " D_UNIT_KELVIN  "{e}";
 #endif  // USE_APDS9960_COLOR
 
@@ -379,7 +376,7 @@ void calculateColorTemperature(void) {
 
   return;
 }
-#endif  // USE_APDS9960_COLOR 
+#endif  // USE_APDS9960_COLOR
 
 /******************************************************************************\
  * Getters and setters for register values
@@ -1787,7 +1784,7 @@ void APDS9960_loop(void) {
     enableGestureSensor();
     APDS9960_overload = false;
     Response_P(PSTR("{\"Gesture\":\"On\"}"));
-    MqttPublishPrefixTopic_P(RESULT_OR_TELE, mqtt_data);  // only after the long break we report, that we are online again
+    MqttPublishPrefixTopic_P(RESULT_OR_TELE, TasmotaGlobal.mqtt_data);  // only after the long break we report, that we are online again
     gesture_mode = 1;
   }
 
@@ -1799,7 +1796,7 @@ void APDS9960_loop(void) {
         disableGestureSensor();
         recovery_loop_counter = APDS9960_LONG_RECOVERY;  // long pause after overload/long press - number of stateloops
         Response_P(PSTR("{\"Gesture\":\"Off\"}"));
-        MqttPublishPrefixTopic_P(RESULT_OR_TELE, mqtt_data);
+        MqttPublishPrefixTopic_P(RESULT_OR_TELE, TasmotaGlobal.mqtt_data);
         gesture_mode = 0;
       }
     }
