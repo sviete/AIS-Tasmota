@@ -2711,10 +2711,9 @@ const mytmplt kModules PROGMEM =
 
 \*********************************************************************************************/
 
-#ifdef ESP32
 // AIS FIX FOR CAM
 // #include "tasmota_template_ESP32-AIS.h"
-#include "tasmota_template_ESP32.h"
+// #include "tasmota_template_ESP32.h"
 
 #endif  // ESP32
 

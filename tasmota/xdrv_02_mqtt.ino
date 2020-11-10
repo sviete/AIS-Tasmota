@@ -578,7 +578,7 @@ void MqttReconnect(void)
   Mqtt.allowed = Settings.flag.mqtt_enabled;  // SetOption3 - Enable MQTT
   if (Mqtt.allowed) {
     // ask for gate ip only if the mqtt client starts with dom-
-    if(String(mqtt_client).indexOf("dom-") != -1) {
+    if(String(TasmotaGlobal.mqtt_client).indexOf("dom-") != -1) {
       if (!Mqtt.ais_retry_counter){
         Mqtt.ais_retry_counter = 180;
         MqttDiscoverServer();
