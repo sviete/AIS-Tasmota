@@ -11,6 +11,7 @@
 .gcc-flags.json
 .cache
 tasmota/user_config_override.h
+tasmota/user_config_override.h.disabled
 build
 build_output
 firmware.map
