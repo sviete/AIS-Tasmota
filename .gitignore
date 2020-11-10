@@ -5,16 +5,17 @@
 
 ## Project files ######
 .platformio
-.pioenvs
-.piolibdeps
+.pio
 .clang_complete
 .gcc-flags.json
 .cache
 tasmota/user_config_override.h
+tasmota/user_config_override.h.disabled
 build
 build_output
 firmware.map
 firmware.asm
+tasmota/tasmota.ino.cpp
 tasmota*.bin
 tasmota*.bin.gz
 tasmota*.map

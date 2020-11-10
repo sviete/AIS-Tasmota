@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v8.4.0.3
+ * Updated until v9.0.0.3
 \*********************************************************************/
 
 //#define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -84,8 +84,10 @@
 #define D_DISABLED "deaktiviert"
 #define D_DISTANCE "Abstand"
 #define D_DNS_SERVER "DNS-Server"
+#define D_DO "Disolved Oxygen"
 #define D_DONE "erledigt"
 #define D_DST_TIME "DST"
+#define D_EC "EC"
 #define D_ECO2 "eCO₂"
 #define D_EMULATION "Emulation"
 #define D_ENABLED "aktiviert"
@@ -124,12 +126,15 @@
 #define D_MULTI_PRESS "Mehrfachdruck"
 #define D_NOISE "Lautstärke"
 #define D_NONE "keine"
+#define D_O2 "Sauerstoff"
 #define D_OFF "aus"
 #define D_OFFLINE "Offline"
 #define D_OK "OK"
 #define D_ON "an"
 #define D_ONLINE "Online"
+#define D_ORP "ORP"
 #define D_PASSWORD "Passwort"
+#define D_PH "pH"
 #define D_PORT "Port"
 #define D_POWER_FACTOR "Leistungsfaktor"
 #define D_POWERUSAGE "Leistung"
@@ -187,6 +192,7 @@
 #define D_UV_POWER "UV Intensität"
 #define D_VERSION "Version"
 #define D_VOLTAGE "Spannung"
+#define D_VOLUME "Volume"
 #define D_WEIGHT "Gewicht"
 #define D_WARMLIGHT "warm"
 #define D_WEB_SERVER "Web-Server"
@@ -600,6 +606,8 @@
 #define D_SENSOR_SDM120_RX     "SDMx20 Rx"
 #define D_SENSOR_SDM630_TX     "SDM630 Tx"
 #define D_SENSOR_SDM630_RX     "SDM630 Rx"
+#define D_SENSOR_WE517_TX      "WE517 Tx"
+#define D_SENSOR_WE517_RX      "WE517 Rx"
 #define D_SENSOR_TM1638_CLK    "TM16 CLK"
 #define D_SENSOR_TM1638_DIO    "TM16 DIO"
 #define D_SENSOR_TM1638_STB    "TM16 STB"
@@ -663,8 +671,8 @@
 #define D_SENSOR_A4988_STP     "A4988 STP"
 #define D_SENSOR_A4988_ENA     "A4988 ENA"
 #define D_SENSOR_A4988_MS1     "A4988 MS1"
-#define D_SENSOR_A4988_MS2     "A4988 MS2"
-#define D_SENSOR_A4988_MS3     "A4988 MS3"
+#define D_SENSOR_OUTPUT_HI     "Output Hi"
+#define D_SENSOR_OUTPUT_LO     "Output Lo"
 #define D_SENSOR_DDS2382_TX    "DDS238-2 Tx"
 #define D_SENSOR_DDS2382_RX    "DDS238-2 Rx"
 #define D_SENSOR_DDSU666_TX    "DDSU666 Tx"
@@ -719,6 +727,8 @@
 #define D_SENSOR_TCP_RXD       "TCP Rx"
 #define D_SENSOR_IEM3000_TX    "iEM3000 TX"
 #define D_SENSOR_IEM3000_RX    "iEM3000 RX"
+#define D_SENSOR_MIEL_HVAC_TX  "MiEl HVAC Tx"
+#define D_SENSOR_MIEL_HVAC_RX  "MiEl HVAC Rx"
 
 // Units
 #define D_UNIT_AMPERE "A"
@@ -737,14 +747,18 @@
 #define D_UNIT_KILOMETER_PER_HOUR "km/h"
 #define D_UNIT_KILOOHM "kΩ"
 #define D_UNIT_KILOWATTHOUR "kWh"
+#define D_UNIT_LITERS "L"
+#define D_UNIT_LITERS_PER_MIN "L/m"
 #define D_UNIT_LUX "lx"
 #define D_UNIT_MICROGRAM_PER_CUBIC_METER "µg/m³"
 #define D_UNIT_MICROMETER "µm"
 #define D_UNIT_MICROSECOND "µs"
+#define D_UNIT_MICROSIEMENS_PER_CM "µS/cm"
 #define D_UNIT_MILLIAMPERE "mA"
 #define D_UNIT_MILLIMETER "mm"
 #define D_UNIT_MILLIMETER_MERCURY "mmHg"
 #define D_UNIT_MILLISECOND "ms"
+#define D_UNIT_MILLIVOLT "mV"
 #define D_UNIT_MINUTE "min"
 #define D_UNIT_PARTS_PER_BILLION "ppb"
 #define D_UNIT_PARTS_PER_DECILITER "ppd"

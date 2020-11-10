@@ -156,7 +156,7 @@ void ZigbeeInputLoop(void) {
       if (Settings.flag3.tuya_serial_mqtt_publish) {
         MqttPublishPrefixTopicRulesProcess_P(TELE, PSTR(D_RSLT_SENSOR));
       } else {
-        AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_ZIGBEE "%s"), mqtt_data);
+        AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_ZIGBEE "%s"), TasmotaGlobal.mqtt_data);
       }
 			// now process the message
       ZigbeeProcessInput(znp_buffer);
@@ -293,13 +293,13 @@ void ZigbeeInitSerial(void)
   zigbee.active = false;
   if (PinUsed(GPIO_ZIGBEE_RX) && PinUsed(GPIO_ZIGBEE_TX)) {
 		AddLog_P2(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_ZIGBEE "GPIOs Rx:%d Tx:%d"), Pin(GPIO_ZIGBEE_RX), Pin(GPIO_ZIGBEE_TX));
-    // if seriallog_level is 0, we allow GPIO 13/15 to switch to Hardware Serial
-    ZigbeeSerial = new TasmotaSerial(Pin(GPIO_ZIGBEE_RX), Pin(GPIO_ZIGBEE_TX), seriallog_level ? 1 : 2, 0, 256);   // set a receive buffer of 256 bytes
+    // if TasmotaGlobal.seriallog_level is 0, we allow GPIO 13/15 to switch to Hardware Serial
+    ZigbeeSerial = new TasmotaSerial(Pin(GPIO_ZIGBEE_RX), Pin(GPIO_ZIGBEE_TX), TasmotaGlobal.seriallog_level ? 1 : 2, 0, 256);   // set a receive buffer of 256 bytes
     ZigbeeSerial->begin(115200);
     if (ZigbeeSerial->hardwareSerial()) {
       ClaimSerial();
-      uint32_t aligned_buffer = ((uint32_t)serial_in_buffer + 3) & ~3;
-			zigbee_buffer = new PreAllocatedSBuffer(sizeof(serial_in_buffer) - 3, (char*) aligned_buffer);
+      uint32_t aligned_buffer = ((uint32_t)TasmotaGlobal.serial_in_buffer + 3) & ~3;
+			zigbee_buffer = new PreAllocatedSBuffer(sizeof(TasmotaGlobal.serial_in_buffer) - 3, (char*) aligned_buffer);
 		} else {
 // AddLog_P2(LOG_LEVEL_INFO, PSTR("ZigbeeInit Mem2 = %d"), ESP_getFreeHeap());
 			zigbee_buffer = new SBuffer(ZIGBEE_BUFFER_SIZE);
@@ -545,7 +545,7 @@ void ZigbeeEZSPSendDATA(const uint8_t *msg, size_t len) {
   }
   EZSP_Serial.to_packets[to_frm] = buf;
   EZSP_Serial.to_end = (to_frm + 1) & 0x07;   // move cursor
-  
+
   // ZigbeeEZSPSendDATA_frm(send_cancel, to_frm, EZSP_Serial.from_ack);
 
   // increment to_frame
@@ -589,6 +589,7 @@ int32_t ZigbeeProcessInputEZSP(class SBuffer &buf) {
       case EZSP_setConcentrator:          // 1000
       case EZSP_networkInit:              // 1700
       case EZSP_stackStatusHandler:       // 1900
+      case EZSP_formNetwork:              // 1E00
       case EZSP_permitJoining:            // 2200
       case EZSP_getEui64:                 // 2600
       case EZSP_getNodeId:                // 2700
@@ -608,7 +609,7 @@ int32_t ZigbeeProcessInputEZSP(class SBuffer &buf) {
         log_level = LOG_LEVEL_DEBUG;
         break;
     }
-    AddLog_P2(log_level, PSTR(D_LOG_ZIGBEE "%s"), mqtt_data);    // TODO move to LOG_LEVEL_DEBUG when stable
+    AddLog_P2(log_level, PSTR(D_LOG_ZIGBEE "%s"), TasmotaGlobal.mqtt_data);    // TODO move to LOG_LEVEL_DEBUG when stable
   }
 
   // Pass message to state machine
@@ -671,13 +672,14 @@ int32_t ZigbeeProcessInputRaw(class SBuffer &buf) {
       // ERROR
       EZ_ERROR(buf.get8(2));
       zigbee.active = false;           // stop all zigbee activities
+      TasmotaGlobal.restart_flag = 2;  // there is nothing more we can do except restart
     } else {
 
       // Unknown
       AddLog_P2(LOG_LEVEL_DEBUG, PSTR("ZIG: Received unknown control byte 0x%02X"), control_byte);
     }
   } else {    // DATA Frame
-    
+
     // adjust to latest acked packet
     uint8_t new_ack = control_byte & 0x07;
     EZSP_HandleAck(new_ack);
@@ -760,7 +762,7 @@ void CmndZbEZSPSend(void)
 // - groupaddr: 16-bits group address, or 0x0000 if unicast using shortaddr
 // - clusterIf: 16-bits cluster number
 // - endpoint:  8-bits target endpoint (source is always 0x01), unused for group addresses. Should not be 0x00 except when sending to group address.
-// - cmdId:     8-bits ZCL command number
+// - cmd:     8-bits ZCL command number
 // - clusterSpecific: boolean, is the message general cluster or cluster specific, used to create the FC byte of ZCL
 // - msg:       pointer to byte array, payload of ZCL message (len is following), ignored if nullptr
 // - len:       length of the 'msg' payload
@@ -785,7 +787,7 @@ void ZigbeeZCLSend_Raw(const ZigbeeZCLSendMessage &zcl) {
   }
   buf.add16(0x0000);                // dest Pan ID, 0x0000 = intra-pan
   buf.add8(0x01);                   // source endpoint
-  buf.add16(zcl.clusterId);
+  buf.add16(zcl.cluster);
   buf.add8(zcl.transacId);              // transacId
   buf.add8(0x30);                   // 30 options
   buf.add8(0x1E);                   // 1E radius
@@ -796,7 +798,7 @@ void ZigbeeZCLSend_Raw(const ZigbeeZCLSendMessage &zcl) {
     buf.add16(zcl.manuf);               // add Manuf Id if not null
   }
   buf.add8(zcl.transacId);              // Transaction Sequence Number
-  buf.add8(zcl.cmdId);
+  buf.add8(zcl.cmd);
   if (zcl.len > 0) {
     buf.addBuffer(zcl.msg, zcl.len);        // add the payload
   }
@@ -814,10 +816,14 @@ void ZigbeeZCLSend_Raw(const ZigbeeZCLSendMessage &zcl) {
     buf.add16(zcl.shortaddr);               // dest addr
     // ApsFrame
     buf.add16(Z_PROF_HA);               // Home Automation profile
-    buf.add16(zcl.clusterId);               // cluster
+    buf.add16(zcl.cluster);               // cluster
     buf.add8(0x01);                     // srcEp
     buf.add8(zcl.endpoint);                 // dstEp
-    buf.add16(EMBER_APS_OPTION_ENABLE_ROUTE_DISCOVERY | EMBER_APS_OPTION_RETRY);      // APS frame
+    if (zcl.direct) {
+      buf.add16(0x0000);      // APS frame
+    } else {
+      buf.add16(EMBER_APS_OPTION_ENABLE_ROUTE_DISCOVERY | EMBER_APS_OPTION_RETRY);      // APS frame
+    }
     buf.add16(zcl.groupaddr);               // groupId
     buf.add8(zcl.transacId);
     // end of ApsFrame
@@ -829,7 +835,7 @@ void ZigbeeZCLSend_Raw(const ZigbeeZCLSendMessage &zcl) {
       buf.add16(zcl.manuf);               // add Manuf Id if not null
     }
     buf.add8(zcl.transacId);              // Transaction Sequance Number
-    buf.add8(zcl.cmdId);
+    buf.add8(zcl.cmd);
     if (zcl.len > 0) {
       buf.addBuffer(zcl.msg, zcl.len);        // add the payload
     }
@@ -838,10 +844,14 @@ void ZigbeeZCLSend_Raw(const ZigbeeZCLSendMessage &zcl) {
     buf.add16(EZSP_sendMulticast);      // 3800
     // ApsFrame
     buf.add16(Z_PROF_HA);               // Home Automation profile
-    buf.add16(zcl.clusterId);               // cluster
+    buf.add16(zcl.cluster);               // cluster
     buf.add8(0x01);                     // srcEp
     buf.add8(zcl.endpoint);                 // broadcast endpoint for groupcast
-    buf.add16(EMBER_APS_OPTION_ENABLE_ROUTE_DISCOVERY | EMBER_APS_OPTION_RETRY);      // APS frame
+    if (zcl.direct) {
+      buf.add16(0x0000);      // APS frame
+    } else {
+      buf.add16(EMBER_APS_OPTION_ENABLE_ROUTE_DISCOVERY | EMBER_APS_OPTION_RETRY);      // APS frame
+    }
     buf.add16(zcl.groupaddr);               // groupId
     buf.add8(zcl.transacId);
     // end of ApsFrame
@@ -855,7 +865,7 @@ void ZigbeeZCLSend_Raw(const ZigbeeZCLSendMessage &zcl) {
       buf.add16(zcl.manuf);               // add Manuf Id if not null
     }
     buf.add8(zcl.transacId);              // Transaction Sequance Number
-    buf.add8(zcl.cmdId);
+    buf.add8(zcl.cmd);
     if (zcl.len > 0) {
       buf.addBuffer(zcl.msg, zcl.len);        // add the payload
     }

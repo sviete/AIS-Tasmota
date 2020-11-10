@@ -67,6 +67,8 @@
 
 #define XDRV_10             10
 
+//#define DEBUG_RULES
+
 #include <unishox.h>
 
 #define D_CMND_RULE "Rule"
@@ -401,7 +403,7 @@ int32_t SetRule(uint32_t idx, const char *content, bool append = false) {
 
 /*******************************************************************************************/
 
-bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
+bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule, bool stop_all_rules)
 {
   // event = {"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}}
   // event = {"System":{"Boot":1}}
@@ -424,7 +426,9 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
   // rule_name  = "INA219#CURRENT"
   // rule_param = "0.100" or "%VAR1%"
 
-//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: expr %s, name %s, param %s"), rule_expr.c_str(), rule_name.c_str(), rule_param.c_str());
+#ifdef DEBUG_RULES
+//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL-RM1: expr %s, name %s, param %s"), rule_expr.c_str(), rule_name.c_str(), rule_param.c_str());
+#endif
 
   char rule_svalue[80] = { 0 };
   float rule_value = 0;
@@ -498,10 +502,14 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
   }
 
   String buf = event;   // copy the string into a new buffer that will be modified
+
+//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL-RM2: RulesRuleMatch |%s|"), buf.c_str());
+
   JsonParser parser((char*)buf.c_str());
   JsonParserObject obj = parser.getRootObject();
   if (!obj) {
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Event too long (%d)"), event.length());
+//    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Event too long (%d)"), event.length());
+    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: No valid JSON (%s)"), buf.c_str());
     return false; // No valid JSON data
   }
   String subtype;
@@ -509,7 +517,7 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
   while ((pos = rule_name.indexOf("#")) > 0) {         // "SUBTYPE1#SUBTYPE2#CURRENT"
     subtype = rule_name.substring(0, pos);
     obj = obj[subtype.c_str()].getObject();
-    if (!obj) { return false; }             // not found
+    if (!obj) { return false; }                        // not found
 
     rule_name = rule_name.substring(pos +1);
     if (i++ > 10) { return false; }                    // Abandon possible loop
@@ -518,7 +526,7 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
   }
 
   JsonParserToken val = obj[rule_name.c_str()];
-  if (!val) { return false; }               // last level not found
+  if (!val) { return false; }                          // last level not found
   const char* str_value;
   if (rule_name_idx) {
     if (val.isArray()) {
@@ -527,11 +535,14 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
       str_value = val.getStr();
     }
   } else {
-    str_value = val.getStr();                     // "CURRENT"
+    str_value = val.getStr();                          // "CURRENT"
   }
 
-//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Name %s, Value |%s|, TrigCnt %d, TrigSt %d, Source %s, Json %s"),
-//  rule_name.c_str(), rule_svalue, Rules.trigger_count[rule_set], bitRead(Rules.triggers[rule_set], Rules.trigger_count[rule_set]), event.c_str(), (str_value) ? str_value : "none");
+#ifdef DEBUG_RULES
+  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL-RM3: Name %s, Value |%s|, TrigCnt %d, TrigSt %d, Source %s, Json |%s|"),
+    rule_name.c_str(), rule_svalue, Rules.trigger_count[rule_set], bitRead(Rules.triggers[rule_set],
+    Rules.trigger_count[rule_set]), event.c_str(), (str_value[0] != '\0') ? str_value : "none");
+#endif
 
   Rules.event_value = str_value;                       // Prepare %value%
 
@@ -571,7 +582,9 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
     }
   } else match = true;
 
-//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Match 1 %d"), match);
+  if (stop_all_rules) { match = false; }
+
+//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL-RM4: Match 1 %d, Triggers %08X, TriggerCount %d"), match, Rules.triggers[rule_set], Rules.trigger_count[rule_set]);
 
   if (bitRead(Settings.rule_once, rule_set)) {
     if (match) {                                       // Only allow match state changes
@@ -585,7 +598,7 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule)
     }
   }
 
-//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Match 2 %d"), match);
+//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL-RM5: Match 2 %d, Triggers %08X, TriggerCount %d"), match, Rules.triggers[rule_set], Rules.trigger_count[rule_set]);
 
   return match;
 }
@@ -657,7 +670,7 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
 
   delay(0);                                               // Prohibit possible loop software watchdog
 
-//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Event = %s, Rule = %s"), event_saved.c_str(), Settings.rules[rule_set]);
+//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL-RP1: Event = %s, Rule = %s"), event_saved.c_str(), Settings.rules[rule_set]);
 
   String rules = GetRule(rule_set);
 
@@ -690,10 +703,12 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
     Rules.event_value = "";
     String event = event_saved;
 
-//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Event |%s|, Rule |%s|, Command(s) |%s|"), event.c_str(), event_trigger.c_str(), commands.c_str());
+#ifdef DEBUG_RULES
+//    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL-RP2: Event |%s|, Rule |%s|, Command(s) |%s|"), event.c_str(), event_trigger.c_str(), commands.c_str());
+#endif
 
-    if (RulesRuleMatch(rule_set, event, event_trigger)) {
-      if (plen == plen2) { stop_all_rules = true; }         // If BREAK was used on a triggered rule, Stop execution of this rule set
+    if (RulesRuleMatch(rule_set, event, event_trigger, stop_all_rules)) {
+      if (plen == plen2) { stop_all_rules = true; }       // If BREAK was used on a triggered rule, Stop execution of this rule set
       commands.trim();
       String ucommand = commands;
       ucommand.toUpperCase();
@@ -719,7 +734,7 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
       RulesVarReplace(commands, F("%UTCTIME%"), String(UtcTime()));
       RulesVarReplace(commands, F("%UPTIME%"), String(MinutesUptime()));
       RulesVarReplace(commands, F("%TIMESTAMP%"), GetDateAndTime(DT_LOCAL));
-      RulesVarReplace(commands, F("%TOPIC%"), mqtt_topic);
+      RulesVarReplace(commands, F("%TOPIC%"), TasmotaGlobal.mqtt_topic);
       snprintf_P(stemp, sizeof(stemp), PSTR("%06X"), ESP_getChipId());
       RulesVarReplace(commands, F("%DEVICEID%"), stemp);
       String mac_address = WiFi.macAddress();
@@ -750,7 +765,6 @@ bool RuleSetProcess(uint8_t rule_set, String &event_saved)
 #endif
       ExecuteCommand(command, SRC_RULE);
       serviced = true;
-      if (stop_all_rules) { return serviced; }            // If BREAK was used, Stop execution of this rule set
     }
     plen += 6;
     Rules.trigger_count[rule_set]++;
@@ -771,6 +785,8 @@ bool RulesProcessEvent(char *json_event)
   ShowFreeMem(PSTR("RulesProcessEvent"));
 #endif
 
+//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: ProcessEvent |%s|"), json_event);
+
   String event_saved = json_event;
   // json_event = {"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}}
   // json_event = {"System":{"Boot":1}}
@@ -783,7 +799,7 @@ bool RulesProcessEvent(char *json_event)
   }
   event_saved.toUpperCase();
 
-//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Event %s"), event_saved.c_str());
+//AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RUL: Event |%s|"), event_saved.c_str());
 
   for (uint32_t i = 0; i < MAX_RULE_SETS; i++) {
     if (GetRuleLen(i) && bitRead(Settings.rule_enabled, i)) {
@@ -798,7 +814,7 @@ bool RulesProcessEvent(char *json_event)
 
 bool RulesProcess(void)
 {
-  return RulesProcessEvent(mqtt_data);
+  return RulesProcessEvent(TasmotaGlobal.mqtt_data);
 }
 
 void RulesInit(void)
@@ -808,7 +824,7 @@ void RulesInit(void)
   // and indicates scripter do not use compress
   bitWrite(Settings.rule_once, 6, 0);
 
-  rules_flag.data = 0;
+  TasmotaGlobal.rules_flag.data = 0;
   for (uint32_t i = 0; i < MAX_RULE_SETS; i++) {
     if (0 == GetRuleLen(i)) {
       bitWrite(Settings.rule_enabled, i, 0);
@@ -823,10 +839,10 @@ void RulesEvery50ms(void)
   if (Settings.rule_enabled && !Rules.busy) {  // Any rule enabled
     char json_event[120];
 
-    if (-1 == Rules.new_power) { Rules.new_power = power; }
+    if (-1 == Rules.new_power) { Rules.new_power = TasmotaGlobal.power; }
     if (Rules.new_power != Rules.old_power) {
       if (Rules.old_power != -1) {
-        for (uint32_t i = 0; i < devices_present; i++) {
+        for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
           uint8_t new_state = (Rules.new_power >> i) &1;
           if (new_state != ((Rules.old_power >> i) &1)) {
             snprintf_P(json_event, sizeof(json_event), PSTR("{\"Power%d\":{\"State\":%d}}"), i +1, new_state);
@@ -835,7 +851,7 @@ void RulesEvery50ms(void)
         }
       } else {
         // Boot time POWER OUTPUTS (Relays) Status
-        for (uint32_t i = 0; i < devices_present; i++) {
+        for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
           uint8_t new_state = (Rules.new_power >> i) &1;
           snprintf_P(json_event, sizeof(json_event), PSTR("{\"Power%d\":{\"Boot\":%d}}"), i +1, new_state);
           RulesProcessEvent(json_event);
@@ -847,7 +863,7 @@ void RulesEvery50ms(void)
 #else
           if (PinUsed(GPIO_SWT1, i)) {
 #endif  // USE_TM1638
-            snprintf_P(json_event, sizeof(json_event), PSTR("{\"" D_JSON_SWITCH "%d\":{\"Boot\":%d}}"), i +1, (SwitchState(i)));
+            snprintf_P(json_event, sizeof(json_event), PSTR("{\"%s\":{\"Boot\":%d}}"), GetSwitchText(i).c_str(), (SwitchState(i)));
             RulesProcessEvent(json_event);
           }
         }
@@ -887,7 +903,7 @@ void RulesEvery50ms(void)
         for (uint32_t i = 0; i < MAX_RULE_VARS; i++) {
           if (bitRead(Rules.vars_event, i)) {
             bitClear(Rules.vars_event, i);
-            snprintf_P(json_event, sizeof(json_event), PSTR("{\"Var%d\":{\"State\":%s}}"), i+1, rules_vars[i]);
+            snprintf_P(json_event, sizeof(json_event), PSTR("{\"Var%d\":{\"State\":\"%s\"}}"), i+1, rules_vars[i]);
             RulesProcessEvent(json_event);
             break;
           }
@@ -897,18 +913,18 @@ void RulesEvery50ms(void)
         for (uint32_t i = 0; i < MAX_RULE_MEMS; i++) {
           if (bitRead(Rules.mems_event, i)) {
             bitClear(Rules.mems_event, i);
-            snprintf_P(json_event, sizeof(json_event), PSTR("{\"Mem%d\":{\"State\":%s}}"), i+1, SettingsText(SET_MEM1 +i));
+            snprintf_P(json_event, sizeof(json_event), PSTR("{\"Mem%d\":{\"State\":\"%s\"}}"), i+1, SettingsText(SET_MEM1 +i));
             RulesProcessEvent(json_event);
             break;
           }
         }
       }
     }
-    else if (rules_flag.data) {
+    else if (TasmotaGlobal.rules_flag.data) {
       uint16_t mask = 1;
       for (uint32_t i = 0; i < MAX_RULES_FLAG; i++) {
-        if (rules_flag.data & mask) {
-          rules_flag.data ^= mask;
+        if (TasmotaGlobal.rules_flag.data & mask) {
+          TasmotaGlobal.rules_flag.data ^= mask;
           json_event[0] = '\0';
           switch (i) {
             case 0: strncpy_P(json_event, PSTR("{\"System\":{\"Init\":1}}"), sizeof(json_event)); break;
@@ -940,16 +956,16 @@ uint8_t rules_xsns_index = 0;
 
 void RulesEvery100ms(void)
 {
-  if (Settings.rule_enabled && !Rules.busy && (uptime > 4)) {  // Any rule enabled and allow 4 seconds start-up time for sensors (#3811)
-    mqtt_data[0] = '\0';
-    int tele_period_save = tele_period;
-    tele_period = 2;                                   // Do not allow HA updates during next function call
+  if (Settings.rule_enabled && !Rules.busy && (TasmotaGlobal.uptime > 4)) {  // Any rule enabled and allow 4 seconds start-up time for sensors (#3811)
+    ResponseClear();
+    int tele_period_save = TasmotaGlobal.tele_period;
+    TasmotaGlobal.tele_period = 2;                                   // Do not allow HA updates during next function call
     XsnsNextCall(FUNC_JSON_APPEND, rules_xsns_index);  // ,"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
-    tele_period = tele_period_save;
-    if (strlen(mqtt_data)) {
-      mqtt_data[0] = '{';                              // {"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
+    TasmotaGlobal.tele_period = tele_period_save;
+    if (strlen(TasmotaGlobal.mqtt_data)) {
+      TasmotaGlobal.mqtt_data[0] = '{';                              // {"INA219":{"Voltage":4.494,"Current":0.020,"Power":0.089}
       ResponseJsonEnd();
-      RulesProcessEvent(mqtt_data);
+      RulesProcessEvent(TasmotaGlobal.mqtt_data);
     }
   }
 }
@@ -960,7 +976,7 @@ void RulesEverySecond(void)
     char json_event[120];
 
     if (RtcTime.valid) {
-      if ((uptime > 60) && (RtcTime.minute != Rules.last_minute)) {  // Execute from one minute after restart every minute only once
+      if ((TasmotaGlobal.uptime > 60) && (RtcTime.minute != Rules.last_minute)) {  // Execute from one minute after restart every minute only once
         Rules.last_minute = RtcTime.minute;
         snprintf_P(json_event, sizeof(json_event), PSTR("{\"Time\":{\"Minute\":%d}}"), MinutesPastMidnight());
         RulesProcessEvent(json_event);
@@ -1875,12 +1891,12 @@ void ExecuteCommandBlock(const char * commands, int len)
     String sCurrentCommand = oneCommand;
     sCurrentCommand.trim();
     if (sCurrentCommand.length() > 0
-      && backlog.size() < MAX_BACKLOG && !backlog_mutex)
+      && backlog.size() < MAX_BACKLOG && !TasmotaGlobal.backlog_mutex)
     {
       //Insert into backlog
-      backlog_mutex = true;
+      TasmotaGlobal.backlog_mutex = true;
       backlog.add(insertPosition, sCurrentCommand);
-      backlog_mutex = false;
+      TasmotaGlobal.backlog_mutex = false;
       insertPosition++;
     }
   }
@@ -2023,7 +2039,7 @@ void CmndRule(void)
       CmndRule();
       MqttPublishPrefixTopic_P(RESULT_OR_STAT, XdrvMailbox.command);
     }
-    mqtt_data[0] = '\0';             // Disable further processing
+    ResponseClear();                 // Disable further processing
     return;
   }
   uint8_t index = XdrvMailbox.index;
@@ -2092,10 +2108,10 @@ void CmndRule(void)
       rule = rule.substring(0, MAX_RULE_SIZE);
       rule += F("...");
     }
-    // snprintf_P (mqtt_data, sizeof(mqtt_data), PSTR("{\"%s%d\":\"%s\",\"Once\":\"%s\",\"StopOnError\":\"%s\",\"Free\":%d,\"Rules\":\"%s\"}"),
+    // snprintf_P (TasmotaGlobal.mqtt_data, sizeof(TasmotaGlobal.mqtt_data), PSTR("{\"%s%d\":\"%s\",\"Once\":\"%s\",\"StopOnError\":\"%s\",\"Free\":%d,\"Rules\":\"%s\"}"),
     //   XdrvMailbox.command, index, GetStateText(bitRead(Settings.rule_enabled, index -1)), GetStateText(bitRead(Settings.rule_once, index -1)),
     //   GetStateText(bitRead(Settings.rule_stop, index -1)), sizeof(Settings.rules[index -1]) - strlen(Settings.rules[index -1]) -1, Settings.rules[index -1]);
-    snprintf_P (mqtt_data, sizeof(mqtt_data), PSTR("{\"%s%d\":\"%s\",\"Once\":\"%s\",\"StopOnError\":\"%s\",\"Length\":%d,\"Free\":%d,\"Rules\":\"%s\"}"),
+    snprintf_P (TasmotaGlobal.mqtt_data, sizeof(TasmotaGlobal.mqtt_data), PSTR("{\"%s%d\":\"%s\",\"Once\":\"%s\",\"StopOnError\":\"%s\",\"Length\":%d,\"Free\":%d,\"Rules\":\"%s\"}"),
       XdrvMailbox.command, index, GetStateText(bitRead(Settings.rule_enabled, index -1)), GetStateText(bitRead(Settings.rule_once, index -1)),
       GetStateText(bitRead(Settings.rule_stop, index -1)),
       rule_len, MAX_RULE_SIZE - GetRuleLenStorage(index - 1),
@@ -2114,7 +2130,7 @@ void CmndRuleTimer(void)
       Rules.timer[XdrvMailbox.index -1] = (XdrvMailbox.payload > 0) ? millis() + (1000 * XdrvMailbox.payload) : 0;
 #endif  // USE_EXPRESSION
     }
-    mqtt_data[0] = '\0';
+    ResponseClear();
     for (uint32_t i = 0; i < MAX_RULE_TIMERS; i++) {
       ResponseAppend_P(PSTR("%c\"T%d\":%d"), (i) ? ',' : '{', i +1, (Rules.timer[i]) ? (Rules.timer[i] - millis()) / 1000 : 0);
     }
@@ -2137,7 +2153,7 @@ void CmndVariable(void)
 {
   if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= MAX_RULE_VARS)) {
     if (!XdrvMailbox.usridx) {
-      mqtt_data[0] = '\0';
+      ResponseClear();
       for (uint32_t i = 0; i < MAX_RULE_VARS; i++) {
         ResponseAppend_P(PSTR("%c\"Var%d\":\"%s\""), (i) ? ',' : '{', i +1, rules_vars[i]);
       }
@@ -2169,7 +2185,9 @@ void CmndMemory(void)
       if (XdrvMailbox.data_len > 0) {
 #ifdef USE_EXPRESSION
         if (XdrvMailbox.data[0] == '=') {  // Spaces already been skipped in data
-          dtostrfd(evaluateExpression(XdrvMailbox.data + 1, XdrvMailbox.data_len - 1), Settings.flag2.calc_resolution, SettingsText(SET_MEM1 + XdrvMailbox.index -1));
+          char rules_mem[FLOATSZ];
+          dtostrfd(evaluateExpression(XdrvMailbox.data + 1, XdrvMailbox.data_len - 1), Settings.flag2.calc_resolution, rules_mem);
+          SettingsUpdateText(SET_MEM1 + XdrvMailbox.index -1, rules_mem);
         } else {
           SettingsUpdateText(SET_MEM1 + XdrvMailbox.index -1, ('"' == XdrvMailbox.data[0]) ? "" : XdrvMailbox.data);
         }
@@ -2231,7 +2249,7 @@ void CmndScale(void)
 {
   if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= MAX_RULE_VARS)) {
     if (XdrvMailbox.data_len > 0) {
-      if (strstr(XdrvMailbox.data, ",") != nullptr) {  // Process parameter entry
+      if (strchr(XdrvMailbox.data, ',') != nullptr) {  // Process parameter entry
         char sub_string[XdrvMailbox.data_len +1];
 
         float valueIN = CharToFloat(subStr(sub_string, XdrvMailbox.data, ",", 1));
