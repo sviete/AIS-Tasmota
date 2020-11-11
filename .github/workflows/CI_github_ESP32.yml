@@ -1,12 +1,7 @@
 name: Tasmota ESP32 CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
 
 jobs:
   tasmota32:
@@ -28,7 +23,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-   
+
   tasmota32-webcam:
     runs-on: ubuntu-latest
     steps:
@@ -108,7 +103,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-       
+
   tasmota32-sensors:
     runs-on: ubuntu-latest
     steps:
@@ -188,7 +183,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-  
+
   tasmota32-BR:
     runs-on: ubuntu-latest
     steps:
@@ -268,7 +263,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-       
+
   tasmota32-ES:
     runs-on: ubuntu-latest
     steps:
@@ -348,7 +343,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-        
+
   tasmota32-HU:
     runs-on: ubuntu-latest
     steps:
@@ -428,7 +423,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-       
+
   tasmota32-PL:
     runs-on: ubuntu-latest
     steps:
@@ -508,7 +503,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-  
+
   tasmota32-SE:
     runs-on: ubuntu-latest
     steps:
@@ -588,7 +583,7 @@ jobs:
       with:
         name: firmware
         path: ./build_output/firmware
-       
+
   tasmota32-UK:
     runs-on: ubuntu-latest
     steps:
