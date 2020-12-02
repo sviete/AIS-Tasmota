@@ -1137,6 +1137,10 @@ void SettingsDelta(void)
   if (Settings.version != VERSION) {      // Fix version dependent changes
 
 #ifdef ESP8266
+    // AIS dom - safeguard to prevent soft bricking during the migration path violation
+    if (Settings.version < 0x07000002) {
+      SettingsDefault();
+    }
     if (Settings.version < 0x07000002) {
       Settings.web_color2[0][0] = Settings.web_color[0][0];
       Settings.web_color2[0][1] = Settings.web_color[0][1];
