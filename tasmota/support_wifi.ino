@@ -445,11 +445,18 @@ void WifiCheckIp(void)
           AddLog_P(LOG_LEVEL_INFO, S_LOG_WIFI, PSTR(D_CONNECT_FAILED_AP_TIMEOUT));
           Settings.wifi_channel = 0;  // Disable stored AP
         } else {
-          // AIS - WIFI_MANAGER if no SET_STASSID1
+          // AIS dom - WIFI_MANAGER or special ssid on start if no STASSID1
           if (!strlen(SettingsText(SET_STASSID1))) {
-            Settings.wifi_channel = 0;  // Disable stored AP
-            wifi_config_tool = WIFI_MANAGER;  // Skip empty SSIDs and start Wifi config tool
-            Wifi.retry = 0;
+            if (strlen(SettingsText(SET_STASSID2)) && Wifi.retry > 1) {
+              AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - SSID2 if no SSID1 on int, wifi retry %d"), Wifi.retry);
+              WifiBegin(2, 0); // Select special SSID
+            } else {
+              // Start WIFI_MANAGER
+              AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - WIFI_MANAGER if no SSID1 on int, wifi retry %d"), Wifi.retry);
+              Settings.wifi_channel = 0;  // Disable stored AP
+              wifi_config_tool = WIFI_MANAGER;  // Skip empty SSIDs and start Wifi config tool
+              Wifi.retry = 0;
+            }
           } else {
             AddLog_P(LOG_LEVEL_DEBUG, S_LOG_WIFI, PSTR(D_ATTEMPTING_CONNECTION));
           }
