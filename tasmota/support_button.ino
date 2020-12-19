@@ -251,7 +251,7 @@ void ButtonHandler(void) {
           Button.hold_timer[button_index]++;
           // AIS dom WiFi on hold
           if (Button.hold_timer[button_index] == loops_per_second * Settings.param[P_HOLD_TIME] / 10) {  // Button hold
-                AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - start Wi-Fi Manager, button hold %d"), Button.hold_timer[button_index]);
+                AddLog_P(LOG_LEVEL_INFO, PSTR("AIS dom - start Wi-Fi Manager, button hold %d"), Button.hold_timer[button_index]);
                 // AIS dom WifiConfig 2 always - start Wi-Fi Manager
                 snprintf_P(scmnd, sizeof(scmnd), PSTR(D_CMND_WIFICONFIG " 2"));
                 ExecuteCommand(scmnd, SRC_BUTTON);

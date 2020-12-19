@@ -204,7 +204,7 @@ void WifiBegin(uint8_t flag, uint8_t channel)
   } else {
     if (!strlen(SettingsText(SET_STASSID1)) && Wifi.retry < 3) {
         // no ssid1 and not able to connect to ssid2 try rescue connection...
-        AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_WIFI "AIS WIFI rescue connection... %d "), Wifi.retry);
+        AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_WIFI "AIS WIFI rescue connection... %d "), Wifi.retry);
         WiFi.disconnect(true);
         delay(200);
         WifiSetMode(WIFI_STA);
@@ -463,11 +463,11 @@ void WifiCheckIp(void)
           // AIS dom - WIFI_MANAGER or special ssid on start if no STASSID1
           if (!strlen(SettingsText(SET_STASSID1))) {
             if (strlen(SettingsText(SET_STASSID2)) && Wifi.retry > 1) {
-              AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - SSID2 if no SSID1 on int, wifi retry %d"), Wifi.retry);
+              AddLog_P(LOG_LEVEL_INFO, PSTR("AIS dom - SSID2 if no SSID1 on int, wifi retry %d"), Wifi.retry);
               WifiBegin(2, 0); // Select special SSID
             } else {
               // Start WIFI_MANAGER
-              AddLog_P2(LOG_LEVEL_INFO, PSTR("AIS dom - WIFI_MANAGER if no SSID1 on int, wifi retry %d"), Wifi.retry);
+              AddLog_P(LOG_LEVEL_INFO, PSTR("AIS dom - WIFI_MANAGER if no SSID1 on int, wifi retry %d"), Wifi.retry);
               Settings.wifi_channel = 0;  // Disable stored AP
               wifi_config_tool = WIFI_MANAGER;  // Skip empty SSIDs and start Wifi config tool
               Wifi.retry = 0;
