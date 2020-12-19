@@ -87,7 +87,7 @@ void StartMdns(void) {
 //      } else {
 //        mdns_delayed_start = Settings.param[P_MDNS_DELAYED_START];
         Mdns.begun = (uint8_t)MDNS.begin(TasmotaGlobal.hostname);
-        AddLog_P2(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS "%s"), (Mdns.begun) ? D_INITIALIZED : D_FAILED);
+        AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS "%s"), (Mdns.begun) ? D_INITIALIZED : D_FAILED);
 //      }
     }
   }
@@ -105,7 +105,7 @@ void MdnsAddServiceHttp(void) {
 void MdnsUpdate(void) {
   if (2 == Mdns.begun) {
     MDNS.update();
-    AddLog_P(LOG_LEVEL_DEBUG_MORE, D_LOG_MDNS, "MDNS.update");
+    AddLog_P(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_MDNS "MDNS.update"));
   }
 }
 #endif  // WEBSERVER_ADVERTISE
