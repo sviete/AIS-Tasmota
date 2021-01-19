@@ -10,13 +10,13 @@ jobs:
     continue-on-error: true
     steps:
     - uses: actions/checkout@v1
-    - name: Use latest AIS-Tasmota  master
+    - name: Use Tasmota master
       run: |
         git config --local user.name "Platformio BUILD"
-        git switch -c master
-        git remote add -f AIS-Tasmota "https://github.com/sviete/AIS-Tasmota.git"
-        git merge AIS-Tasmota/master --allow-unrelated-histories
-    - name: Push AIS-Tasmota   # Push updates of latest AIS-Tasmota master to repo
+        git switch -c work
+        git remote add -f Tasmota "https://github.com/arendst/Tasmota.git"
+        git merge Tasmota/master --allow-unrelated-histories
+    - name: Push Tasmota   # Push updates of latest Tasmota master to repo
       uses: ad-m/github-push-action@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -827,71 +827,6 @@ jobs:
         name: firmware
         path: ./build_output/firmware
 
-  tasmota32-ais-ble:
-    needs: tasmota_pull
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python
-      uses: actions/setup-python@v1
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -U platformio
-        platformio upgrade --dev
-        platformio update
-    - name: Run PlatformIO
-      run: |
-        platformio run -e tasmota32-ais-ble
-    - uses: actions/upload-artifact@v2
-      with:
-        name: firmware
-        path: ./build_output/firmware
-
-  tasmota32-ais-webcam:
-    needs: tasmota_pull
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python
-      uses: actions/setup-python@v1
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -U platformio
-        platformio upgrade --dev
-        platformio update
-    - name: Run PlatformIO
-      run: |
-        platformio run -e tasmota32-ais-webcam
-    - uses: actions/upload-artifact@v2
-      with:
-        name: firmware
-        path: ./build_output/firmware
-
-  tasmota32-ais-webcam-disp:
-    needs: tasmota_pull
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python
-      uses: actions/setup-python@v1
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -U platformio
-        platformio upgrade --dev
-        platformio update
-    - name: Run PlatformIO
-      run: |
-        platformio run -e tasmota32-ais-webcam-disp
-    - uses: actions/upload-artifact@v2
-      with:
-        name: firmware
-        path: ./build_output/firmware
 
   tasmota32-webcam:
     needs: tasmota_pull
@@ -1585,7 +1520,7 @@ jobs:
         [ ! -f ./mv_firmware/tasmota-ir*.* ] || mv ./mv_firmware/tasmota-ir*.* ./firmware/tasmota/
         [ ! -f ./mv_firmware/tasmota-display.* ] || mv ./mv_firmware/tasmota-display.* ./firmware/tasmota/
         [ ! -f ./mv_firmware/tasmota-knx.* ] || mv ./mv_firmware/tasmota-knx.* ./firmware/tasmota/
-        [ ! -f ./mv_firmware/tasmota-zbbridge.* ] || mv ./mv_firmware/tasmota-zbbridge.* ./firmware/tasmota/
+        [ ! -f ./mv_firmware/tasmota-zbbridge.* ] || mv ./mv_firmware/tasmota-zbbridge.* ./firmware/tasmota/        
         [ ! -f ./mv_firmware/tasmota32.* ] || mv ./mv_firmware/tasmota32.* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/tasmota32-sensors.* ] || mv ./mv_firmware/tasmota32-sensors.* ./firmware/tasmota32/
         [ ! -f ./mv_firmware/tasmota32-minimal.* ] || mv ./mv_firmware/tasmota32-minimal.* ./firmware/tasmota32/
@@ -1599,17 +1534,17 @@ jobs:
         rm ./firmware/tasmota32/*.gz
         rm ./firmware/tasmota32/languages/*.gz
         [ ! -f ./tools/Esptool/ESP32/*.* ] || mv ./tools/Esptool/ESP32/*.* ./firmware/tasmota32/ESP32_needed_files/
-        [ ! -f ./FIRMWARE.md ] || mv -f ./FIRMWARE.md ./README.md
+        [ ! -f ./FIRMWARE.md ] || mv -f ./RELEASENOTES.md ./README.md
     - name: Commit files  # transfer the new binaries back into the repository
       run: |
         git config --local user.name "Platformio BUILD"
         git rm -r --cached .
         git add ./README.md
         git add -f ./firmware/*.*
-        git commit -m "AIS-Tasmota ESP Binaries https://www.ai-speaker.com"
+        git commit -m "Tasmota ESP Binaries http://tasmota.com"
     - name: Push changes  # push the firmware files to branch firmware
       uses: ad-m/github-push-action@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: 'firmware'
+        branch: 'release-firmware'
         force: true
