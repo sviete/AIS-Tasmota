@@ -4,7 +4,7 @@
   Created by Gerhard Mutz on 07.10.11.
   adapted for Tasmota
 
-  Copyright (C) 2020  Gerhard Mutz and Theo Arends
+  Copyright (C) 2021  Gerhard Mutz and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -821,40 +821,41 @@ uint8_t sml_logindex;
 
 void Dump2log(void) {
 
-int16_t index=0,hcnt=0;
-uint32_t d_lastms;
-uint8_t dchars[16];
+  int16_t index=0,hcnt=0;
+  uint32_t d_lastms;
+  uint8_t dchars[16];
+  char log_data[128];
 
   //if (!SML_SAVAILABLE) return;
 
   if (dump2log&8) {
     // combo mode
     while (SML_SAVAILABLE) {
-      TasmotaGlobal.log_data[index]=':';
+      log_data[index]=':';
       index++;
-      TasmotaGlobal.log_data[index]=' ';
+      log_data[index]=' ';
       index++;
       d_lastms=millis();
       while ((millis()-d_lastms)<40) {
         if (SML_SAVAILABLE) {
           uint8_t c=SML_SREAD;
-          sprintf(&TasmotaGlobal.log_data[index],"%02x ",c);
+          sprintf(&log_data[index],"%02x ",c);
           dchars[hcnt]=c;
           index+=3;
           hcnt++;
           if (hcnt>15) {
             // line complete, build asci chars
-            TasmotaGlobal.log_data[index]='=';
+            log_data[index]='=';
             index++;
-            TasmotaGlobal.log_data[index]='>';
+            log_data[index]='>';
             index++;
-            TasmotaGlobal.log_data[index]=' ';
+            log_data[index]=' ';
             index++;
             for (uint8_t ccnt=0; ccnt<16; ccnt++) {
               if (isprint(dchars[ccnt])) {
-                TasmotaGlobal.log_data[index]=dchars[ccnt];
+                log_data[index]=dchars[ccnt];
               } else {
-                TasmotaGlobal.log_data[index]=' ';
+                log_data[index]=' ';
               }
               index++;
             }
@@ -863,8 +864,8 @@ uint8_t dchars[16];
         }
       }
       if (index>0) {
-        TasmotaGlobal.log_data[index]=0;
-        AddLog(LOG_LEVEL_INFO);
+        log_data[index]=0;
+        AddLogData(LOG_LEVEL_INFO, log_data);
         index=0;
         hcnt=0;
       }
@@ -875,24 +876,24 @@ uint8_t dchars[16];
       while (SML_SAVAILABLE) {
         char c=SML_SREAD&0x7f;
         if (c=='\n' || c=='\r') {
-          TasmotaGlobal.log_data[sml_logindex]=0;
-          AddLog(LOG_LEVEL_INFO);
+          log_data[sml_logindex]=0;
+          AddLogData(LOG_LEVEL_INFO, log_data);
           sml_logindex=2;
-          TasmotaGlobal.log_data[0]=':';
-          TasmotaGlobal.log_data[1]=' ';
+          log_data[0]=':';
+          log_data[1]=' ';
           break;
         }
-        TasmotaGlobal.log_data[sml_logindex]=c;
-        if (sml_logindex<sizeof(TasmotaGlobal.log_data)-2) {
+        log_data[sml_logindex]=c;
+        if (sml_logindex<sizeof(log_data)-2) {
           sml_logindex++;
         }
       }
     } else {
       //while (SML_SAVAILABLE) {
       index=0;
-      TasmotaGlobal.log_data[index]=':';
+      log_data[index]=':';
       index++;
-      TasmotaGlobal.log_data[index]=' ';
+      log_data[index]=' ';
       index++;
       d_lastms=millis();
       while ((millis()-d_lastms)<40) {
@@ -901,9 +902,14 @@ uint8_t dchars[16];
           if (meter_desc_p[(dump2log&7)-1].type=='e') {
             // ebus
             c=SML_SREAD;
-            sprintf(&TasmotaGlobal.log_data[index],"%02x ",c);
+            sprintf(&log_data[index],"%02x ",c);
             index+=3;
-            if (c==EBUS_SYNC) break;
+            if (c==EBUS_SYNC) {
+#if SML_EBUS_SKIP_SYNC_DUMPS
+              index = index == 5 ? 0 : index;
+#endif
+              break;
+            }
           } else {
             // sml
             if (sml_start==0x77) {
@@ -916,14 +922,14 @@ uint8_t dchars[16];
               }
             }
             c=SML_SREAD;
-            sprintf(&TasmotaGlobal.log_data[index],"%02x ",c);
+            sprintf(&log_data[index],"%02x ",c);
             index+=3;
           }
         }
       }
       if (index>2) {
-        TasmotaGlobal.log_data[index]=0;
-        AddLog(LOG_LEVEL_INFO);
+        log_data[index]=0;
+        AddLogData(LOG_LEVEL_INFO, log_data);
       }
     }
   }
@@ -1257,7 +1263,7 @@ void sml_shift_in(uint32_t meters,uint32_t shard) {
             SML_Decode(meters);
         } else {
             // crc error
-            //AddLog_P(LOG_LEVEL_INFO, PSTR("ebus crc error"));
+            //AddLog(LOG_LEVEL_INFO, PSTR("ebus crc error"));
         }
       }
       meter_spos[meters]=0;
@@ -1414,7 +1420,7 @@ void SML_Decode(uint8_t index) {
     } else {
       // compare value
       uint8_t found=1;
-      uint32_t ebus_dval=99;
+      double ebus_dval=99;
       float mbus_dval=99;
       while (*mp!='@') {
         if (meter_desc_p[mindex].type=='o' || meter_desc_p[mindex].type=='c') {
@@ -1538,16 +1544,16 @@ void SML_Decode(uint8_t index) {
 #ifdef ED300L
         g_mindex=mindex;
 #endif
-        if (*mp=='#') {
+        if (*mp == '#') {
           // get string value
           mp++;
-          if (meter_desc_p[mindex].type=='o') {
-            for (uint8_t p=0;p<METER_ID_SIZE;p++) {
-              if (*cp==*mp) {
-                meter_id[mindex][p]=0;
+          if (meter_desc_p[mindex].type == 'o') {
+            for (uint8_t p=0; p<METER_ID_SIZE; p++) {
+              if (*cp == *mp) {
+                meter_id[mindex][p] = 0;
                 break;
               }
-              meter_id[mindex][p]=*cp++;
+              meter_id[mindex][p] = *cp++;
             }
           } else {
             sml_getvalue(cp,mindex);
@@ -1557,17 +1563,27 @@ void SML_Decode(uint8_t index) {
           if (meter_desc_p[mindex].type!='e' && meter_desc_p[mindex].type!='r' && meter_desc_p[mindex].type!='m' && meter_desc_p[mindex].type!='M' && meter_desc_p[mindex].type!='p') {
             // get numeric values
             if (meter_desc_p[mindex].type=='o' || meter_desc_p[mindex].type=='c') {
-              dval=CharToDouble((char*)cp);
+              if (*mp == '(') {
+                mp++;
+                // skip this bracket
+                char *bp = strchr((char*)cp, '(');
+                if (bp) {
+                  cp = (uint8_t*) (bp + 1);
+                }
+                dval=CharToDouble((char*)cp);
+              } else {
+                dval=CharToDouble((char*)cp);
+              }
             } else {
-              dval=sml_getvalue(cp,mindex);
+              dval = sml_getvalue(cp,mindex);
             }
           } else {
             // ebus pzem or mbus or raw
             if (*mp=='b') {
               mp++;
-              uint8_t shift=*mp&7;
-              ebus_dval>>=shift;
-              ebus_dval&=1;
+              uint8_t shift = *mp&7;
+              ebus_dval = (uint32_t)ebus_dval>>shift;
+              ebus_dval = (uint32_t)ebus_dval&1;
               mp+=2;
             }
             if (*mp=='i') {
@@ -2003,7 +2019,7 @@ void SML_Init(void) {
           index--;
           srcpin=strtol(lp,&lp,10);
           if (Gpio_used(srcpin)) {
-            AddLog_P(LOG_LEVEL_INFO, PSTR("gpio rx double define!"));
+            AddLog(LOG_LEVEL_INFO, PSTR("gpio rx double define!"));
 dddef_exit:
             if (script_meter) free(script_meter);
             script_meter=0;
@@ -2040,7 +2056,7 @@ dddef_exit:
             lp++;
             script_meter_desc[index].trxpin=strtol(lp,&lp,10);
             if (Gpio_used(script_meter_desc[index].trxpin)) {
-              AddLog_P(LOG_LEVEL_INFO, PSTR("gpio tx double define!"));
+              AddLog(LOG_LEVEL_INFO, PSTR("gpio tx double define!"));
               goto dddef_exit;
             }
             if (*lp!=',') goto next_line;

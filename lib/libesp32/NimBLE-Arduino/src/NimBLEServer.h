@@ -49,8 +49,9 @@ public:
     void                   startAdvertising();
     void                   stopAdvertising();
     void                   start();
-    NimBLEService*         getServiceByUUID(const char* uuid);
-    NimBLEService*         getServiceByUUID(const NimBLEUUID &uuid);
+    NimBLEService*         getServiceByUUID(const char* uuid, uint16_t instanceId = 0);
+    NimBLEService*         getServiceByUUID(const NimBLEUUID &uuid, uint16_t instanceId = 0);
+    NimBLEService*         getServiceByHandle(uint16_t handle);
     int                    disconnect(uint16_t connID,
                                       uint8_t reason = BLE_ERR_REM_USER_CONN_TERM);
     void                   updateConnParams(uint16_t conn_handle,
@@ -113,6 +114,15 @@ public:
      * @param [in] pServer A reference to the %BLE server that received the existing client disconnection.
      */
     virtual void onDisconnect(NimBLEServer* pServer);
+
+     /**
+     * @brief Handle a client disconnection.
+     * This is called when a client discconnects.
+     * @param [in] pServer A pointer to the %BLE server that received the client disconnection.
+     * @param [in] desc A pointer to the connection description structure containig information
+     * about the connection.
+     */
+    virtual void onDisconnect(NimBLEServer* pServer, ble_gap_conn_desc* desc);
 
     /**
      * @brief Called when a client requests a passkey for pairing.
