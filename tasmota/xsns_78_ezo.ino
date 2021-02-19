@@ -1,7 +1,7 @@
 /*
   xsns_78_ezo.ino - EZO modules base class
 
-  Copyright (C) 2020  Christopher Tremblay
+  Copyright (C) 2021  Christopher Tremblay
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -53,7 +53,7 @@ struct EZOStruct {
   {
     // Transmit our command verbatim
     Wire.beginTransmission(addr);
-    Wire.write(cmd, len);
+    Wire.write((uint8_t*)cmd, len);
     if (Wire.endTransmission() != 0) {
       return;
     }

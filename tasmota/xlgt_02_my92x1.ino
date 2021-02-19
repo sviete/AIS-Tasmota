@@ -1,7 +1,7 @@
 /*
   xlgt_02_my92x1.ino - led support for Tasmota
 
-  Copyright (C) 2020  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -26,8 +26,8 @@
 #define XLGT_02             2
 
 struct MY92X1 {
-  uint8_t pdi_pin = 0;
-  uint8_t pdcki_pin = 0;
+  int8_t pdi_pin = 0;
+  int8_t pdcki_pin = 0;
   uint8_t model = 0;
 } My92x1;
 
@@ -138,7 +138,7 @@ void My92x1ModuleSelected(void)
     LightMy92x1Init();
 
     TasmotaGlobal.light_driver = XLGT_02;
-    AddLog_P(LOG_LEVEL_DEBUG, PSTR("DBG: MY29x1 Found"));
+    AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: MY29x1 Found"));
   }
 }
 
