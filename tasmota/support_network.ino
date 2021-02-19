@@ -28,6 +28,7 @@ struct {
 /*********************************************************************************************/
 void MqttDiscoverServer(void) {
   AddLog_P(LOG_LEVEL_INFO, "AIS EASY: Wykrywam MQTT Host dla bramki: %s", TasmotaGlobal.mqtt_client);
+  
   HTTPClient http;
   http.begin(AIS_WS_URL);
   http.setAuthorization(AIS_WS_USER, AIS_WS_PASS);
@@ -57,20 +58,16 @@ void MqttDiscoverServer(void) {
             AddLog_P(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki %s NIE wykryty.", SettingsText(SET_MQTT_USER));
           }
         } else {
-          snprintf_P(TasmotaGlobal.log_data, sizeof(TasmotaGlobal.log_data), line.c_str());
-          AddLog(LOG_LEVEL_DEBUG_MORE);
+          AddLog(LOG_LEVEL_DEBUG,  line.c_str());
       }
   }
   else {
-      snprintf_P(TasmotaGlobal.log_data, sizeof(TasmotaGlobal.log_data), "AIS EASY: Error on HTTP request.");
-      AddLog(LOG_LEVEL_INFO);
+      AddLog(LOG_LEVEL_INFO, "AIS EASY: Error on HTTP request.");
   }
 
   // Disconnect
   http.end();
-
-  snprintf_P(TasmotaGlobal.log_data, sizeof(TasmotaGlobal.log_data), "AIS EASY: Rozłączono.");
-  AddLog(LOG_LEVEL_INFO);
+  AddLog(LOG_LEVEL_INFO, "AIS EASY: Rozłączono.");
 }
 /*********************************************************************************************/
 
