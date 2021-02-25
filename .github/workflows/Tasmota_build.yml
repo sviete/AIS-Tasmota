@@ -783,7 +783,7 @@ jobs:
     - uses: actions/upload-artifact@v2
       with:
         name: firmware
-        path: ./build_output/firmware
+        path: ./build_output
 
   tasmota32-ais-webcam:
     needs: tasmota_pull
@@ -805,7 +805,7 @@ jobs:
     - uses: actions/upload-artifact@v2
       with:
         name: firmware
-        path: ./build_output/firmware
+        path: ./build_output
 
   tasmota32-ais-webcam-disp:
     needs: tasmota_pull
@@ -827,7 +827,7 @@ jobs:
     - uses: actions/upload-artifact@v2
       with:
         name: firmware
-        path: ./build_output/firmware
+        path: ./build_output
 
   tasmota32-odroidgo:
     needs: tasmota_pull
