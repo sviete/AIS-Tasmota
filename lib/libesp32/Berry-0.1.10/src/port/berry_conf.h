@@ -8,19 +8,6 @@
 #ifndef BERRY_CONF_H
 #define BERRY_CONF_H
 
-#include <pgmspace.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-    extern int strncmp_PP(const char * str1P, const char * str2P, size_t size);
-    extern char * strchr_P(const char *s, int c);
-
-#ifdef __cplusplus
-}
-#endif
-
 #include <assert.h>
 
 /* Macro: BE_DEBUG
@@ -53,12 +40,12 @@ extern "C" {
  * Use precompiled objects to avoid creating these objects at
  * runtime. Enable this macro can greatly optimize RAM usage.
  * Default: 1
- **/
-#ifdef ESP8266
-#define BE_USE_PRECOMPILED_OBJECT       0
-#else
-#define BE_USE_PRECOMPILED_OBJECT       0           // will enable later when stabilized
-#endif
+//  **/
+// #ifdef ESP8266
+// #define BE_USE_PRECOMPILED_OBJECT       0
+// #else
+#define BE_USE_PRECOMPILED_OBJECT       1           // will enable later when stabilized
+// #endif
 
 /* Macro: BE_DEBUG_RUNTIME_INFO
  * Set runtime error debugging information.
@@ -76,6 +63,12 @@ extern "C" {
  * Default: 1
  **/
 #define BE_DEBUG_VAR_INFO               0
+
+/* Macro: BE_USE_OBSERVABILITY_HOOK
+ * Use the obshook function to report low-level actions.
+ * Default: 0
+ **/
+#define BE_USE_OBSERVABILITY_HOOK       1
 
 /* Macro: BE_STACK_TOTAL_MAX
  * Set the maximum total stack size.
@@ -162,6 +155,13 @@ extern "C" {
 #define BE_USE_SYS_MODULE               0
 #define BE_USE_DEBUG_MODULE             1
 #define BE_USE_GC_MODULE                1
+#define BE_USE_SOLIDIFY_MODULE          1
+
+// #ifdef ESP32
+#define BE_USE_TASMOTA                  1
+// #else
+// #define BE_USE_TASMOTA                     0
+// #endif
 
 /* Macro: BE_EXPLICIT_XXX
  * If these macros are defined, the corresponding function will
@@ -169,11 +169,27 @@ extern "C" {
  * are not required.
  * The default is to use the functions in the standard library.
  **/
+#ifdef USE_BERRY_PSRAM
+#ifdef __cplusplus
+extern "C" {
+#endif
+  extern void *berry_malloc(uint32_t size);
+  extern void *berry_realloc(void *ptr, size_t size);
+#ifdef __cplusplus
+}
+#endif
+  #define BE_EXPLICIT_MALLOC              special_malloc
+  #define BE_EXPLICIT_REALLOC             special_realloc
+#else
+  #define BE_EXPLICIT_MALLOC              malloc
+  #define BE_EXPLICIT_REALLOC             realloc
+#endif // USE_BERRY_PSRAM
+
 #define BE_EXPLICIT_ABORT               abort
 #define BE_EXPLICIT_EXIT                exit
-#define BE_EXPLICIT_MALLOC              malloc
+// #define BE_EXPLICIT_MALLOC              malloc
 #define BE_EXPLICIT_FREE                free
-#define BE_EXPLICIT_REALLOC             realloc
+// #define BE_EXPLICIT_REALLOC             realloc
 
 /* Macro: be_assert
  * Berry debug assertion. Only enabled when BE_DEBUG is active.

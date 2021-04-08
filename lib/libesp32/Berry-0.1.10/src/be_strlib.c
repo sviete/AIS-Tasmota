@@ -176,7 +176,7 @@ const char* be_pushvfstr(bvm *vm, const char *format, va_list arg)
         }
         pushstr(vm, format, p - format);
         concat2(vm);
-        switch (pgm_read_byte(&p[1])) {
+        switch (p[1]) {
         case 's': {
             const char *s = va_arg(arg, char*);
             if (s == NULL) {
@@ -336,11 +336,23 @@ bstring* be_strindex(bvm *vm, bstring *str, bvalue *idx)
     return NULL;
 }
 
+size_t be_strlcpy(char *dst, const char *src, size_t maxlen)
+{
+    const size_t srclen = strlen(src);
+    if (srclen + 1 < maxlen) {
+        memcpy(dst, src, srclen + 1);
+    } else if (maxlen != 0) {
+        memcpy(dst, src, maxlen - 1);
+        dst[maxlen-1] = '\0';
+    }
+    return srclen;
+}
+
 const char* be_splitpath(const char *path)
 {
     const char *p;
-    for (p = path - 1; pgm_read_byte(path) != '\0'; ++path) {
-        if (pgm_read_byte(path) == '/') {
+    for (p = path - 1; *path != '\0'; ++path) {
+        if (*path == '/') {
             p = path;
         }
     }

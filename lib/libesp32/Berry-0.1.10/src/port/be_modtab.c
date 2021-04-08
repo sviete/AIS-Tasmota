@@ -18,9 +18,12 @@ be_extern_native_module(os);
 be_extern_native_module(sys);
 be_extern_native_module(debug);
 be_extern_native_module(gc);
+be_extern_native_module(solidify);
 
 /* Tasmota specific */
-be_extern_native_module(tasmota);
+be_extern_native_module(light);
+be_extern_native_module(gpio);
+be_extern_native_module(energy);
 
 /* user-defined modules declare start */
 
@@ -53,10 +56,38 @@ BERRY_LOCAL const bntvmodule* const be_module_table[] = {
 #if BE_USE_GC_MODULE
     &be_native_module(gc),
 #endif
+#if BE_USE_SOLIDIFY_MODULE
+    &be_native_module(solidify),
+#endif
     /* user-defined modules register start */
-
-    &be_native_module(tasmota),
+// #ifdef ESP32
+#if BE_USE_TASMOTA
+    &be_native_module(gpio),
+    &be_native_module(light),
+#endif
+    &be_native_module(energy),
+// #endif // ESP32
 
     /* user-defined modules register end */
     NULL /* do not remove */
 };
+
+#ifdef ESP32
+extern void be_load_tasmota_ntvlib(bvm *vm);
+extern void be_load_wirelib(bvm *vm);
+extern void be_load_driverlib(bvm *vm);
+
+/* this code loads the native class definitions */
+BERRY_API void be_load_custom_libs(bvm *vm)
+{
+    (void)vm;   /* prevent a compiler warning */
+    
+    /* add here custom libs */
+#if !BE_USE_PRECOMPILED_OBJECT
+    /* be_load_xxxlib(vm); */
+#endif
+    be_load_tasmota_ntvlib(vm);
+    be_load_wirelib(vm);
+    be_load_driverlib(vm);
+}
+#endif

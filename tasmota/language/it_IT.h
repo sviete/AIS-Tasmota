@@ -1,7 +1,7 @@
 /*
   it-IT.h - localization for Italian - Italy for Tasmota
 
-  Copyright (C) 2021  Gennaro Tortone - some mods by Antonio Fragola - Updated by bovirus - rev. 12.02.2021
+  Copyright (C) 2021  Gennaro Tortone, Antonio Fragola, Bovirus and Adrian Scillato
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -28,11 +28,11 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v6.0.0a
+ * Last update - 9.3.1.2 (27.03.2021)
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
-
+// https://www.science.co.il/language/Locale-codes.php
 #define LANGUAGE_LCID 1040
 // HTML (ISO 639-1) Language Code
 #define D_HTML_LANGUAGE "it"
@@ -109,6 +109,7 @@
 #define D_GATEWAY "Gateway"
 #define D_GROUP "Gruppo"
 #define D_HOST "Host"
+#define D_HALL_EFFECT "Effetto hall"
 #define D_HOSTNAME "Nome host"
 #define D_HUMIDITY "Umidità"
 #define D_ILLUMINANCE "Illuminazione"
@@ -211,7 +212,7 @@
 #define D_ANALOG_INPUT "Ingresso analogico"
 
 // support.ino
-#define D_OSWATCH "osWatch"
+#define D_OSWATCH "S.O. orologio"
 #define D_BLOCKED_LOOP "Ciclo bloccato"
 #define D_WPS_FAILED_WITH_STATUS "WPSconfig fallito con stato"
 #define D_ACTIVE_FOR_3_MINUTES "Attivo per 3 minuti"
@@ -296,7 +297,7 @@
 
 #define D_MQTT_PARAMETERS "Parametri MQTT"
 #define D_CLIENT "Client"
-#define D_FULL_TOPIC "Full topic"
+#define D_FULL_TOPIC "Argomento completo"
 
 #define D_LOGGING_PARAMETERS "Livelli registri eventi"
 #define D_SERIAL_LOG_LEVEL "Livello registro seriale"
@@ -585,6 +586,10 @@
 #define D_StL1L2L3 "Corrente L1+L2+L3"
 #define D_SpL1L2L3 "Tensione L1+L2+L3/3"
 
+// xsns_86_tfminiplus.ino
+#define D_SIGNALSTRENGTH "Livello segnale"
+#define D_CHIPTEMPERATURE "Temperatura chip"
+
 // tasmota_template.h - keep them as short as possible to be able to fit them in GUI drop down box
 #define D_SENSOR_NONE          "Nessuno"
 #define D_SENSOR_USER          "Utente"
@@ -643,6 +648,9 @@
 #define D_SENSOR_TM1638_CLK    "TM1638 - CLK"
 #define D_SENSOR_TM1638_DIO    "TM1638 - DIO"
 #define D_SENSOR_TM1638_STB    "TM1638 - STB"
+#define D_SENSOR_MAX7219_DIN    "MAX7219 - DIN"
+#define D_SENSOR_MAX7219_CS    "MAX7219 - CS"
+#define D_SENSOR_MAX7219_CLK    "MAX7219 - CLK"
 #define D_SENSOR_HX711_SCK     "HX711 - SCK"
 #define D_SENSOR_HX711_DAT     "HX711 - DAT"
 #define D_SENSOR_FTC532        "FTC532"
@@ -666,14 +674,16 @@
 #define D_SENSOR_MAX31855_CS   "MX31855 - CS"
 #define D_SENSOR_MAX31855_CLK  "MX31855 - CLK"
 #define D_SENSOR_MAX31855_DO   "MX31855 - DO"
-#define D_SENSOR_MAX31865_CS   "MX31865 CS"
+#define D_SENSOR_MAX31865_CS   "MX31865 - CS"
 #define D_SENSOR_NRG_SEL       "HLWBL - SEL"  // Suffix "i"
 #define D_SENSOR_NRG_CF1       "HLWBL - CF1"
 #define D_SENSOR_HLW_CF        "HLW8012 - CF"
 #define D_SENSOR_HJL_CF        "BL0937 - CF"
 #define D_SENSOR_MCP39F5_TX    "MCP39F5 - TX"
 #define D_SENSOR_MCP39F5_RX    "MCP39F5 - RX"
-#define D_SENSOR_MCP39F5_RST   "MCP39F5 - Reset"
+#define D_SENSOR_MCP39F5_RST   "MCP39F5 - RESET"
+#define D_SENSOR_CSE7761_TX    "CSE7761 - TX"
+#define D_SENSOR_CSE7761_RX    "CSE7761 - RX"
 #define D_SENSOR_CSE7766_TX    "CSE7766 - TX"
 #define D_SENSOR_CSE7766_RX    "CSE7766 - RX"
 #define D_SENSOR_PN532_TX      "PN532 - TX"
@@ -694,10 +704,10 @@
 #define D_SENSOR_HRE_DATA      "HRE - Dati"
 #define D_SENSOR_ADE7953_IRQ   "ADE7953 - IRQ"
 #define D_SENSOR_BUZZER        "Cicalino"
-#define D_SENSOR_OLED_RESET    "OLED - Reset"
+#define D_SENSOR_OLED_RESET    "OLED - RESET"
 #define D_SENSOR_ZIGBEE_TXD    "Zigbee - TX"
 #define D_SENSOR_ZIGBEE_RXD    "Zigbee - RX"
-#define D_SENSOR_ZIGBEE_RST    "Zigbee - Reset"
+#define D_SENSOR_ZIGBEE_RST    "Zigbee - RESET"
 #define D_SENSOR_SOLAXX1_TX    "SolaxX1 - TX"
 #define D_SENSOR_SOLAXX1_RX    "SolaxX1 - RX"
 #define D_SENSOR_IBEACON_TX    "iBeacon - TX"
@@ -769,18 +779,22 @@
 #define D_SENSOR_IEM3000_RX    "iEM3000 - RX"
 #define D_SENSOR_MIEL_HVAC_TX  "MiEl HVAC - TX"
 #define D_SENSOR_MIEL_HVAC_RX  "MiEl HVAC - RX"
+#define D_SENSOR_PROJECTOR_CTRL_TX  "DLP - Tx"
+#define D_SENSOR_PROJECTOR_CTRL_RX  "DLP - Rx"
 #define D_SENSOR_SHELLY_DIMMER_BOOT0 "SHD - Boot 0"
 #define D_SENSOR_SHELLY_DIMMER_RST_INV "SHD - Reset"
 #define D_SENSOR_RC522_RST     "RC522 - Reset"
 #define D_SENSOR_RC522_CS      "RC522 - CS"
 #define D_SENSOR_NRF24_CS      "NRF24 - CS"
 #define D_SENSOR_NRF24_DC      "NRF24 - DC"
+#define D_SENSOR_XPT2046_CS    "XPT2046 - CS"
 #define D_SENSOR_ILI9341_CS    "ILI9341 - CS"
 #define D_SENSOR_ILI9341_DC    "ILI9341 - DC"
 #define D_SENSOR_ILI9488_CS    "ILI9488 - CS"
 #define D_SENSOR_EPAPER29_CS   "EPaper29 - CS"
 #define D_SENSOR_EPAPER42_CS   "EPaper42 - CS"
 #define D_SENSOR_SSD1351_CS    "SSD1351 - CS"
+#define D_SENSOR_SSD1351_DC    "SSD1351 - DC"
 #define D_SENSOR_RA8876_CS     "RA8876 - CS"
 #define D_SENSOR_ST7789_CS     "ST7789 - CS"
 #define D_SENSOR_ST7789_DC     "ST7789 - DC"
@@ -789,8 +803,14 @@
 #define D_SENSOR_SDCARD_CS     "Scheda SD - CS"
 #define D_SENSOR_WIEGAND_D0    "Wiegand - D0"
 #define D_SENSOR_WIEGAND_D1    "Wiegand - D1"
-#define D_SENSOR_NEOPOOL_TX    "NeoPool Tx"
-#define D_SENSOR_NEOPOOL_RX    "NeoPool Rx"
+#define D_SENSOR_NEOPOOL_TX    "NeoPool - TX"
+#define D_SENSOR_NEOPOOL_RX    "NeoPool - RX"
+#define D_SENSOR_VL53L0X_XSHUT "VL53L0X XSHUT"
+#define D_SENSOR_TFMINIPLUS_TX  "TFmini+ - TX"
+#define D_SENSOR_TFMINIPLUS_RX  "TFmini+ - RX"
+#define D_SENSOR_ZEROCROSS     "Impulsi ZC"
+#define D_SENSOR_HALLEFFECT    "Effetto hall"
+
 
 // Units
 #define D_UNIT_AMPERE "A"
@@ -837,6 +857,10 @@
 #define D_UNIT_WATT "W"
 #define D_UNIT_WATTHOUR "Wh"
 #define D_UNIT_WATT_METER_QUADRAT "W/m²"
+
+#define D_NEW_ADDRESS          "Imposta indirizzo a"
+#define D_OUT_OF_RANGE         "Fuori intervallo"
+#define D_SENSOR_DETECTED      "rilevato"
 
 //SDM220, SDM120, SDM72, LE01MR
 #define D_EXPORT_POWER    "Potenza esportata"
@@ -998,7 +1022,7 @@
 #define D_NEOPOOL_RELAY_FILTRATION        "Filtrazione"
 #define D_NEOPOOL_RELAY_LIGHT             "Luce"
 #define D_NEOPOOL_RELAY_PH_ACID           "Pompa per acido"
-#define D_NEOPOOL_RELAY_PH_BASE           "Popa base"
+#define D_NEOPOOL_RELAY_PH_BASE           "Pompa base"
 #define D_NEOPOOL_RELAY_RX                "Livello Redox"
 #define D_NEOPOOL_RELAY_CL                "Pompa cloro"
 #define D_NEOPOOL_RELAY_CD                "Pompa salamoia"
@@ -1010,7 +1034,7 @@
 #define D_NEOPOOL_COVER                   "Copertura"
 #define D_NEOPOOL_SHOCK                   "Shock"
 #define D_NEOPOOL_ALARM                   "! "
-#define D_NEOPOOL_LOW                     "Low"
+#define D_NEOPOOL_LOW                     "Bassa"
 #define D_NEOPOOL_FLOW1                   "FL1"
 #define D_NEOPOOL_FLOW2                   "FL2"
 #define D_NEOPOOL_PH_HIGH                 "troppo alto"          // ph Alarms

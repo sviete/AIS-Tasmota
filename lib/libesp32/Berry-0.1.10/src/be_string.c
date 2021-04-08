@@ -14,7 +14,7 @@
 #define next(_s)    cast(void*, cast(bstring*, (_s)->next))
 #define sstr(_s)    cast(char*, cast(bsstring*, _s) + 1)
 #define lstr(_s)    cast(char*, cast(blstring*, _s) + 1)
-#define cstr(_s)    (cast(bcstring*, s)->s)
+#define cstr(_s)    (cast(bcstring*, _s)->s)
 
 #define be_define_const_str(_name, _s, _hash, _extra, _len, _next) \
     BERRY_LOCAL const bcstring be_const_str_##_name = {            \
@@ -44,13 +44,26 @@ int be_eqstr(bstring *s1, bstring *s2)
     if (s1 == s2) { /* short string or the same string */
         return 1;
     }
-    slen = pgm_read_byte(&s1->slen);
+    slen = s1->slen;
+    /* discard different lengths */
+    if (slen != s2->slen) {
+        return 0;
+    }
     /* long string */
-    if (slen == 255 && slen == pgm_read_byte(&s2->slen)) {
+    if (slen == 255) {  /* s2->slen is also 255 */
         blstring *ls1 = cast(blstring*, s1);
         blstring *ls2 = cast(blstring*, s2);
         return ls1->llen == ls2->llen && !strcmp(lstr(ls1), lstr(ls2));
     }
+    // TODO one is long const and the other is long string
+    /* const short strings */
+    if (gc_isconst(s1) || gc_isconst(s2)) { /* one of the two string is short const */
+        if (cast(bcstring*, s1)->hash && cast(bcstring*, s2)->hash) {
+            return 0; /* if they both have a hash, then we know they are different */
+        }
+        return !strcmp(str(s1), str(s2));
+    }
+
     return 0;
 }
 
@@ -88,7 +101,7 @@ static void resize(bvm *vm, int size)
 
 static void free_sstring(bvm *vm, bstring *str)
 {
-    be_free(vm, str, sizeof(bsstring) + pgm_read_byte(&str->slen) + 1);
+    be_free(vm, str, sizeof(bsstring) + str->slen + 1);
 }
 
 /* FNV-1a Hash */
@@ -97,8 +110,7 @@ static uint32_t str_hash(const char *str, size_t len)
     uint32_t hash = 2166136261u;
     be_assert(str || len);
     while (len--) {
-        hash = (hash ^ (unsigned char)pgm_read_byte(str)) * 16777619u;
-        str++;
+        hash = (hash ^ (unsigned char)*str++) * 16777619u;
     }
     return hash;
 }
@@ -150,7 +162,7 @@ static bstring* find_conststr(const char *str, size_t len)
     uint32_t hash = str_hash(str, len);
     bcstring *s = (bcstring*)tab->table[hash % tab->size];
     for (; s != NULL; s = next(s)) {
-        if (len == pgm_read_byte(&s->slen) && !strncmp(str, s->s, len)) {
+        if (len == s->slen && !strncmp(str, s->s, len)) {
             return (bstring*)s;
         }
     }
@@ -166,7 +178,7 @@ static bstring* newshortstr(bvm *vm, const char *str, size_t len)
     bstring **list = vm->strtab.table + (hash & (size - 1));
 
     for (s = *list; s != NULL; s = next(s)) {
-        if (len == pgm_read_byte(&s->slen) && !strncmp(str, sstr(s), len)) {
+        if (len == s->slen && !strncmp(str, sstr(s), len)) {
             return s;
         }
     }
@@ -250,10 +262,15 @@ void be_gcstrtab(bvm *vm)
 uint32_t be_strhash(const bstring *s)
 {
     if (gc_isconst(s)) {
-        return cast(bcstring*, s)->hash;
+        bcstring* cs = cast(bcstring*, s);
+        if (cs->hash) {  /* if hash is null we need to compute it */
+            return cs->hash;
+        } else {
+            return str_hash(cstr(s), str_len(s));
+        }
     }
 #if BE_USE_STR_HASH_CACHE
-    if (pgm_read_byte(&s->slen) != 255) {
+    if (s->slen != 255) {
         return cast(bsstring*, s)->hash;
     }
 #endif
@@ -266,7 +283,7 @@ const char* be_str2cstr(const bstring *s)
     if (gc_isconst(s)) {
         return cstr(s);
     }
-    if (pgm_read_byte(&s->slen) == 255) {
+    if (s->slen == 255) {
         return lstr(s);
     }
     return sstr(s);

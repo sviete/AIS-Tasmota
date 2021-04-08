@@ -35,6 +35,17 @@ static void class_init(bvm *vm, bclass *c, const bnfuncinfo *lib)
             }
             ++lib;
         }
+        if (lib->function == (bntvfunc) BE_CLOSURE) {
+            /* next section is closures */
+            ++lib;
+            while (lib->name) {
+                if (lib->function) { /* method */
+                    bstring *s = be_newstr(vm, lib->name);
+                    be_closure_method_bind(vm, c, s, (bclosure*) lib->function);
+                }
+                ++lib;
+            }
+        }
         be_map_release(vm, c->members); /* clear space */
     }
 }
@@ -344,6 +355,13 @@ BERRY_API void be_pushvalue(bvm *vm, int index)
     bvalue *reg = vm->top;
     var_setval(reg, be_indexof(vm, index));
     be_incrtop(vm);
+}
+
+BERRY_API void be_pushclosure(bvm *vm, void *cl)
+{
+    bvalue *reg = be_incrtop(vm);
+    bclosure * closure = (bclosure*) cl;
+    var_setclosure(reg, closure);
 }
 
 BERRY_API void be_pushntvclosure(bvm *vm, bntvfunc f, int nupvals)
@@ -976,6 +994,7 @@ BERRY_API int be_pcall(bvm *vm, int argc)
     return be_protectedcall(vm, f, argc);
 }
 
+__attribute__((noreturn))
 BERRY_API void be_raise(bvm *vm, const char *except, const char *msg)
 {
     be_pushstring(vm, except);
@@ -987,6 +1006,9 @@ BERRY_API void be_raise(bvm *vm, const char *except, const char *msg)
     be_pop(vm, 2);
     be_save_stacktrace(vm);
     be_throw(vm, BE_EXCEPTION);
+#ifdef __GNUC__
+    __builtin_unreachable();
+#endif
 }
 
 BERRY_API void be_stop_iteration(bvm *vm)
