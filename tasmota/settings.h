@@ -148,10 +148,10 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
     uint32_t zb_topic_endpoint : 1;        // bit 6 (v9.2.0.4)   - SetOption120 - (Zigbee) Append endpoint number to topic if device dependent (use with SetOption89)
     uint32_t mqtt_state_retain : 1;        // bit 7 (v9.3.0.1)   - CMND_STATERETAIN
     uint32_t mqtt_info_retain  : 1;        // bit 8 (v9.3.0.1)   - CMND_INFORETAIN
-    uint32_t spare09 : 1;                  // bit 9
-    uint32_t spare10 : 1;                  // bit 10
-    uint32_t spare11 : 1;                  // bit 11
-    uint32_t spare12 : 1;                  // bit 12
+    uint32_t wiegand_hex_output : 1;       // bit 9 (v9.3.1.1)   - SetOption123 - (Wiegand) switch tag number output to hex format (1)
+    uint32_t wiegand_keypad_to_tag : 1;    // bit 10 (v9.3.1.1)  - SetOption124 - (Wiegand) send key pad stroke as single char (0) or one tag (ending char #) (1)
+    uint32_t zigbee_hide_bridge_topic : 1; // bit 11 (v9.3.1.1)  - SetOption125 - (Zigbee) Hide bridge topic from zigbee topic (use with SetOption89) (1)
+    uint32_t ds18x20_mean : 1;             // bit 12 (v9.3.1.2)  - SetOption126 - (DS18x20) Enable arithmetic mean over teleperiod for JSON temperature (1)
     uint32_t spare13 : 1;                  // bit 13
     uint32_t spare14 : 1;                  // bit 14
     uint32_t spare15 : 1;                  // bit 15
@@ -259,7 +259,7 @@ typedef union {
     uint16_t int_report_defer : 4;          // Number of interrupts to ignore until reporting (default 0, max 15)
     uint16_t int_count_en : 1;              // Enable interrupt counter for this pin
     uint16_t int_retain_flag : 1;           // Report if interrupt occured for pin in next teleperiod
-    uint16_t spare13 : 1;
+    uint16_t keep_output : 1;               // For output modes, preserve the value currently in the MCP230xx
     uint16_t spare14 : 1;
     uint16_t spare15 : 1;
   };
@@ -327,6 +327,18 @@ typedef struct {
   uint8_t dpid = 0;
 } TuyaFnidDpidMap;
 
+typedef union {
+  uint8_t data;
+  struct {
+  uint8_t type : 3;
+  uint8_t invert : 1;
+  uint8_t spare4 : 1;
+  uint8_t spare5 : 1;
+  uint8_t spare6 : 1;
+  uint8_t spare7 : 1;
+  };
+} DisplayOptions;
+
 const uint32_t settings_text_size = 699;   // Settings.text_pool[size] = Settings.display_model (2D2) - Settings.text_pool (017)
 const uint8_t MAX_TUYA_FUNCTIONS = 16;
 
@@ -355,7 +367,6 @@ struct {
   uint8_t       text_pool_290[66];         // 290
 
   // End of single char array of 698 chars max ****************
-
   uint8_t       display_model;             // 2D2
   uint8_t       display_mode;              // 2D3
   uint8_t       display_refresh;           // 2D4
@@ -375,8 +386,9 @@ struct {
   uint8_t       param[PARAM8_SIZE];        // 2FC  SetOption32 .. SetOption49
   int16_t       toffset[2];                // 30E
   uint8_t       display_font;              // 312
+  DisplayOptions  display_options;         // 313
 
-  uint8_t       free_313[44];              // 313
+  uint8_t       free_314[43];              // 314
 
   uint8_t       tuyamcu_topic;             // 33F  Manage tuyaSend topic. ex_energy_power_delta on 6.6.0.20, replaced on 8.5.0.1
   uint16_t      domoticz_update_timer;     // 340
@@ -476,7 +488,12 @@ struct {
 
   power_t       interlock[MAX_INTERLOCKS_SET];  // 4D0 MAX_INTERLOCKS = MAX_RELAYS / 2
 
-  uint8_t       free_508[41];              // 508
+  uint8_t       free_508[36];              // 508
+
+  uint16_t      mqtt_keepalive;            // 52C
+  uint16_t      mqtt_socket_timeout;       // 52E
+
+  uint8_t       free_530[1];               // 530
 
   uint8_t       ina219_mode;               // 531
   uint16_t      pulse_timer[MAX_PULSETIMERS];  // 532
