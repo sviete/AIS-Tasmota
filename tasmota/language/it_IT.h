@@ -1,7 +1,7 @@
 /*
   it-IT.h - localization for Italian - Italy for Tasmota
 
-  Copyright (C) 2021  Gennaro Tortone, Antonio Fragola, Bovirus and Adrian Scillato
+  Copyright (C) 2021  Gennaro Tortone, Antonio Fragola, bovirus and Adrian Scillato
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Last update - 9.3.1.2 (27.03.2021)
+ * Updated until v9.3.1.2 - Last update 10.04.2021
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -810,7 +810,7 @@
 #define D_SENSOR_TFMINIPLUS_RX  "TFmini+ - RX"
 #define D_SENSOR_ZEROCROSS     "Impulsi ZC"
 #define D_SENSOR_HALLEFFECT    "Effetto hall"
-#define D_SENSOR_EPD_DATA      "EPD - Data"
+#define D_SENSOR_EPD_DATA      "EPD - Dati"
 
 // Units
 #define D_UNIT_AMPERE "A"
@@ -916,6 +916,9 @@
 #define D_MANAGE_FILE_SYSTEM   "Gestione File system"
 #define D_FS_SIZE              "Dimensione"
 #define D_FS_FREE              "Liberi"
+#define D_NEW_FILE             "newfile.txt"
+#define D_CREATE_NEW_FILE      "Create and edit new file"
+#define D_EDIT_FILE            "Edit File"
 
 //xsns_67_as3935.ino
 #define D_AS3935_GAIN "guadagno:"
