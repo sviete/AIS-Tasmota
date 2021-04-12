@@ -3490,7 +3490,7 @@ const char HTTP_FORM_BLE[] PROGMEM =
   "<form method='get' action='" WEB_HANDLE_BLE "'>"
   "<p><label><input id='e0' type='checkbox'%s><b>" D_MQTT_BLE_ENABLE "</b></label></p>"
   "<p><label><input id='e1' type='checkbox'%s><b>" D_MQTT_BLE_ACTIVESCAN "</b></label></p>"
-  "<p>items marked (*) are not stored in config</p>";
+  "<p>" D_CONFIG_NO_STORE_INFO "</p>";
 
 
 const char HTTP_BLE_DEV_STYLE[] PROGMEM = "th, td { padding-left:5px; }";
