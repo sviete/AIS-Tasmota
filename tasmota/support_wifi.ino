@@ -215,25 +215,16 @@ void WifiBegin(uint8_t flag, uint8_t channel)
     char hex_char[18];
     snprintf_P(stemp, sizeof(stemp), PSTR(" Channel %d BSSId %s"), channel, ToHex_P((unsigned char*)Wifi.bssid, 6, hex_char, sizeof(hex_char), ':'));
   } else {
-    if (!strlen(SettingsText(SET_STASSID1)) && Wifi.retry < 3) {
+    if (!strlen(SettingsText(SET_STASSID1)) && Wifi.retry < 5) {
         // no ssid1 and not able to connect to ssid2 try rescue connection...
         AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_WIFI "AIS WIFI rescue connection... %d "), Wifi.retry);
-        WiFi.disconnect(true);
-        delay(200);
-        WifiSetMode(WIFI_STA);
-        WiFi.setSleepMode(WIFI_MODEM_SLEEP); 
         WiFi.begin("8DB0839D", "094FAFE8");
-        byte WifiatemptCount = 0;
-        while ((WiFi.status() != WL_CONNECTED) && (WifiatemptCount <= 10)) {
-            delay(500);
-            WifiatemptCount++;
-	      }
      } else {
         WiFi.begin(SettingsText(SET_STASSID1 + Settings.sta_active), SettingsText(SET_STAPWD1 + Settings.sta_active));
     }
   }
   AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_WIFI D_CONNECTING_TO_AP "%d %s%s " D_IN_MODE " 11%c " D_AS " %s..."),
-    Settings.sta_active +1, SettingsText(SET_STASSID1 + Settings.sta_active), stemp, pgm_read_byte(&kWifiPhyMode[WiFi.getPhyMode() & 0x3]), TasmotaGlobal.hostname);
+  Settings.sta_active +1, SettingsText(SET_STASSID1 + Settings.sta_active), stemp, pgm_read_byte(&kWifiPhyMode[WiFi.getPhyMode() & 0x3]), TasmotaGlobal.hostname);
 
 #if LWIP_IPV6
   for (bool configured = false; !configured;) {
@@ -455,7 +446,7 @@ void WifiCheckIp(void)
         } else {
           // AIS dom - WIFI_MANAGER or special ssid on start if no STASSID1
           if (!strlen(SettingsText(SET_STASSID1))) {
-            if (strlen(SettingsText(SET_STASSID2)) && Wifi.retry > 1) {
+            if (strlen(SettingsText(SET_STASSID2)) && Wifi.retry > 2) {
               AddLog_P(LOG_LEVEL_INFO, PSTR("AIS dom - SSID2 if no SSID1 on int, wifi retry %d"), Wifi.retry);
               WifiBegin(2, 0); // Select special SSID
             } else {
