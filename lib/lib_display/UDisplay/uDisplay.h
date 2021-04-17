@@ -3,6 +3,8 @@
 
 #include <Adafruit_GFX.h>
 #include <renderer.h>
+#include <Wire.h>
+#include <SPI.h>
 
 #define _UDSP_I2C 1
 #define _UDSP_SPI 2
@@ -10,6 +12,11 @@
 #define UDISP1_WHITE 1
 #define UDISP1_BLACK 0
 
+#define DISPLAY_INIT_MODE 0
+#define DISPLAY_INIT_PARTIAL 1
+#define DISPLAY_INIT_FULL 2
+
+enum uColorType { uCOLOR_BW, uCOLOR_COLOR };
 
 // Color definitions
 #define UDISP_BLACK       0x0000      /*   0,   0,   0 */
@@ -32,12 +39,24 @@
 #define UDISP_GREENYELLOW 0xAFE5      /* 173, 255,  47 */
 #define UDISP_PINK        0xF81F
 
-#define SPI_BEGIN_TRANSACTION uspi->beginTransaction(spiSettings);
-#define SPI_END_TRANSACTION uspi->endTransaction();
-#define SPI_CS_LOW if (spi_cs >= 0) digitalWrite(spi_cs, LOW);
-#define SPI_CS_HIGH if (spi_cs >= 0) digitalWrite(spi_cs, HIGH);
-#define SPI_DC_LOW if (spi_dc >= 0) digitalWrite(spi_dc, LOW);
-#define SPI_DC_HIGH if (spi_dc >= 0) digitalWrite(spi_dc, HIGH);
+#ifdef ESP8266
+#define PIN_OUT_SET 0x60000304
+#define PIN_OUT_CLEAR 0x60000308
+#define GPIO_SET(A) WRITE_PERI_REG( PIN_OUT_SET, 1 << A)
+#define GPIO_CLR(A) WRITE_PERI_REG( PIN_OUT_CLEAR, 1 << A)
+#else
+#undef GPIO_SET
+#define GPIO_SET(A) GPIO.out_w1ts = (1 << A)
+#undef GPIO_CLR
+#define GPIO_CLR(A) GPIO.out_w1tc = (1 << A)
+#endif
+
+#define SPI_BEGIN_TRANSACTION if (spi_nr <= 2) uspi->beginTransaction(spiSettings);
+#define SPI_END_TRANSACTION if (spi_nr <= 2) uspi->endTransaction();
+#define SPI_CS_LOW if (spi_cs >= 0) GPIO_CLR(spi_cs);
+#define SPI_CS_HIGH if (spi_cs >= 0) GPIO_SET(spi_cs);
+#define SPI_DC_LOW if (spi_dc >= 0) GPIO_CLR(spi_dc);
+#define SPI_DC_HIGH if (spi_dc >= 0) GPIO_SET(spi_dc);
 
 #define ESP32_PWM_CHANNEL 1
 
@@ -58,6 +77,8 @@ class uDisplay : public Renderer {
   void fillScreen(uint16_t color);
   void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
   void pushColors(uint16_t *data, uint16_t len, boolean first);
+  void TS_RotConvert(int16_t *x, int16_t *y);
+  void invertDisplay(boolean i);
 
  private:
    void setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
@@ -67,6 +88,33 @@ class uDisplay : public Renderer {
    uint32_t str2c(char **sp, char *vp, uint32_t len);
    void i2c_command(uint8_t val);
    void spi_command(uint8_t val);
+   void spi_command_one(uint8_t val);
+   void spi_data8(uint8_t val);
+   void spi_data16(uint16_t val);
+   void spi_data32(uint32_t val);
+   void write8(uint8_t val);
+   void write9(uint8_t val, uint8_t dc);
+   void hw_write9(uint8_t val, uint8_t dc);
+   void write16(uint16_t val);
+   void write32(uint32_t val);
+   void spi_data9(uint8_t d, uint8_t dc);
+   void WriteColor(uint16_t color);
+   void SetLut(const unsigned char* lut);
+   void DisplayFrame(void);
+   void Updateframe_EPD();
+   void SetFrameMemory(const unsigned char* image_buffer);
+   void SetFrameMemory(const unsigned char* image_buffer, uint16_t x, uint16_t y, uint16_t image_width, uint16_t image_height);
+   void SetMemoryArea(int x_start, int y_start, int x_end, int y_end);
+   void SetMemoryPointer(int x, int y);
+   void DrawAbsolutePixel(int x, int y, int16_t color);
+   void drawPixel_EPD(int16_t x, int16_t y, uint16_t color);
+   void fillRect_EPD(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+   void drawFastVLine_EPD(int16_t x, int16_t y, int16_t h, uint16_t color);
+   void drawFastHLine_EPD(int16_t x, int16_t y, int16_t w, uint16_t color);
+   void Init_EPD(int8_t p);
+   void spi_command_EPD(uint8_t val);
+   void spi_data8_EPD(uint8_t val);
+   void ClearFrameMemory(unsigned char color);
    uint8_t strlen_ln(char *str);
    int32_t next_val(char **sp);
    uint32_t next_hex(char **sp);
@@ -76,7 +124,12 @@ class uDisplay : public Renderer {
    uint8_t interface;
    uint8_t i2caddr;
    int8_t i2c_scl;
+   TwoWire *wire;
    int8_t i2c_sda;
+   uint8_t i2c_col_start;
+   uint8_t i2c_col_end;
+   uint8_t i2c_page_start;
+   uint8_t i2c_page_end;
    int8_t reset;
    uint8_t dsp_cmds[128];
    uint8_t dsp_ncmds;
@@ -98,17 +151,35 @@ class uDisplay : public Renderer {
    int8_t spi_miso;
    uint8_t dimmer;
    SPIClass *uspi;
+   uint8_t sspi;
    SPISettings spiSettings;
-   uint32_t spi_speed;
+   uint8_t spi_speed;
    uint8_t spi_nr = 1;
-   uint8_t rot_0;
-   uint8_t rot_1;
-   uint8_t rot_2;
-   uint8_t rot_3;
+   uint8_t madctrl;
+   uint8_t startline;
+   uint8_t rot[4];
+   uint8_t rot_t[4];
+   uint16_t x_addr_offs[4];
+   uint16_t y_addr_offs[4];
    uint8_t saw_1;
    uint8_t saw_2;
    uint8_t saw_3;
-   uint8_t flags;
+   uint8_t cur_rot;
+   uint8_t col_mode;
+   uint8_t inv_on;
+   uint8_t inv_off;
+   uint8_t sa_mode;
+   uint8_t dim_op;
+   uint8_t lutfsize;
+   uint8_t lutpsize;
+   uint16_t lutftime;
+   uint16_t lutptime;
+   uint16_t lut3time;
+   uint8_t ep_mode;
+   uint8_t lut_full[64];
+   uint8_t lut_partial[64];
 };
+
+
 
 #endif // _UDISP_
