@@ -3476,11 +3476,11 @@ std::string BLETriggerResponse(generic_sensor_t *toSend){
 #ifdef USE_WEBSERVER
 
 #define WEB_HANDLE_BLE "ble"
-#define D_CONFIGURE_BLE "Configure BLE"
-#define D_BLE_PARAMETERS "Bluetooth Settings"
-#define D_MQTT_BLE_ENABLE "Enable Bluetooth"
-#define D_MQTT_BLE_ACTIVESCAN "Enable Active Scan(*)"
-#define D_BLE_DEVICES "Devices Seen"
+#define D_CONFIGURE_BLE "Konfiguracja BLE"
+#define D_BLE_PARAMETERS "Ustawienia Bluetooth"
+#define D_MQTT_BLE_ENABLE "Włącz Bluetooth"
+#define D_MQTT_BLE_ACTIVESCAN "Włącz Aktywne Skanowanie(*)"
+#define D_BLE_DEVICES "Widoczne urządzenia"
 
 const char HTTP_BTN_MENU_BLE[] PROGMEM =
   "<p><form action='" WEB_HANDLE_BLE "' method='get'><button>" D_CONFIGURE_BLE "</button></form></p>";
