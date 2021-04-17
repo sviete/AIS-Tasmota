@@ -886,7 +886,7 @@ void PerformEverySecond(void)
     Settings.last_module = Settings.module;
 
 #ifdef USE_DEEPSLEEP
-    if (!(DeepSleepEnabled() && !Settings.flag3.bootcount_update)) {
+    if (!(DeepSleepEnabled() && !Settings.flag3.bootcount_update)) {  // SetOption76  - (Deepsleep) Enable incrementing bootcount (1) when deepsleep is enabled
 #endif
       Settings.bootcount++;              // Moved to here to stop flash writes during start-up
       AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION D_BOOT_COUNT " %d"), Settings.bootcount);
@@ -1155,7 +1155,7 @@ void Every250mSeconds(void)
           }
 #endif  // ESP8266
           char version[50];
-          snprintf_P(version, sizeof(version), PSTR("%s-%s"), TasmotaGlobal.image_name, TasmotaGlobal.version);
+          snprintf_P(version, sizeof(version), PSTR("%s%s"), TasmotaGlobal.version, TasmotaGlobal.image_name);
           AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_UPLOAD "%s %s"), TasmotaGlobal.mqtt_data, version);
           WiFiClient OTAclient;
           ota_result = (HTTP_UPDATE_FAILED != ESPhttpUpdate.update(OTAclient, TasmotaGlobal.mqtt_data, version));
@@ -1305,7 +1305,7 @@ void Every250mSeconds(void)
       if (Settings.webserver) {
 
 #ifdef ESP8266
-        StartWebserver(Settings.webserver, WiFi.localIP());
+        if (!WifiIsInManagerMode()) { StartWebserver(Settings.webserver, WiFi.localIP()); }
 #endif  // ESP8266
 #ifdef ESP32
 #ifdef USE_ETHERNET

@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.3.1.1
+ * Updated until v9.3.1.2
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -256,6 +256,7 @@
 #define D_CONFIGURATION "Configuração"
 #define D_INFORMATION "Informação"
 #define D_FIRMWARE_UPGRADE "Atualização de Firmware"
+#define D_MANAGEMENT "Consoles"
 #define D_CONSOLE "Consola"
 #define D_CONFIRM_RESTART "Confirmar o reinício"
 
@@ -290,10 +291,19 @@
 #define D_WEP "WEP"
 #define D_WPA_PSK "WPA PSK"
 #define D_WPA2_PSK "WPA2 PSK"
-#define D_AP1_SSID "SSId do AP1"
-#define D_AP1_PASSWORD "Palavra Chave do AP1"
-#define D_AP2_SSID "SSId do AP2"
-#define D_AP2_PASSWORD "Palavra Chave do AP2"
+#define D_AP1_SSID "Rede WiFi"
+#define D_AP1_SSID_HELP "Type or Select your WiFi Network"
+#define D_AP2_SSID "Rede WiFi 2"
+#define D_AP2_SSID_HELP "Digite ou selecione sua rede WiFi"
+#define D_AP_PASSWORD "Palavra Chave do WiFi"
+#define D_AP_PASSWORD_HELP "Digite sua Palavra Chave do WiFi"
+#define D_SELECT_YOUR_WIFI_NETWORK "Selecione sua Rede WiFi"
+#define D_SHOW_MORE_WIFI_NETWORKS "Procure todas as Redes WiFi"
+#define D_SHOW_MORE_OPTIONS "Mais Opções"
+#define D_CHECK_CREDENTIALS "Por favor, verifique suas credenciais"
+#define D_SUCCESSFUL_WIFI_CONNECTION "Conexão WiFi bem-sucedida"
+#define D_NOW_YOU_CAN_CLOSE_THIS_WINDOW "Agora você pode fechar esta janela"
+#define D_REDIRECTING_TO_NEW_IP "Redirecionando para o novo endereço IP do dispositivo"
 
 #define D_MQTT_PARAMETERS "Parametros MQTT"
 #define D_CLIENT "Cliente"
