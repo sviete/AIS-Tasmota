@@ -15,7 +15,7 @@ jobs:
         git config --local user.name "Platformio BUILD"
         git switch -c work
         git remote add -f AIS-Tasmota "https://github.com/sviete/AIS-Tasmota.git"
-        git merge Tasmota/development --allow-unrelated-histories
+        git merge AIS-Tasmota/ais_ble_z2m_nfc_dev --allow-unrelated-histories
     - name: Push AIS Tasmota   # Push updates of latest AIS Tasmota development to repo
       uses: ad-m/github-push-action@master
       with:
