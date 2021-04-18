@@ -117,6 +117,8 @@ String GetDeviceHardware(void) {
     #include "esp32/rom/rtc.h"
   #elif CONFIG_IDF_TARGET_ESP32S2  // ESP32-S2
     #include "esp32s2/rom/rtc.h"
+  #elif CONFIG_IDF_TARGET_ESP32C3  // ESP32-C3
+    #include "esp32c3/rom/rtc.h"
   #else
     #error Target CONFIG_IDF_TARGET is not supported
   #endif
@@ -242,6 +244,8 @@ extern "C" {
     #include "esp32/rom/spi_flash.h"
   #elif CONFIG_IDF_TARGET_ESP32S2   // ESP32-S2
     #include "esp32s2/rom/spi_flash.h"
+  #elif CONFIG_IDF_TARGET_ESP32C3   // ESP32-C3
+    #include "esp32c3/rom/spi_flash.h"
   #else
     #error Target CONFIG_IDF_TARGET is not supported
   #endif
@@ -497,6 +501,16 @@ float CpuTemperature(void) {
   return ConvertTemp(temperatureRead());
 }
 
+/*
+#if CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/esp_efuse.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/esp_efuse.h"
+#elif CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/esp_efuse.h"
+#endif
+*/
+
 String GetDeviceHardware(void) {
 /*
 Source: esp-idf esp_system.h and esptool
@@ -572,9 +586,9 @@ typedef struct {
         pkg_version = (word3 >> 21) & 0x0F
         return pkg_version
 */
-//    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PKG_VERSION);
-//    uint32_t pkg_version = chip_ver & 0x7;
-    uint32_t pkg_version = esp_efuse_get_pkg_ver();
+    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PKG_VERSION);
+    uint32_t pkg_version = chip_ver & 0x7;
+//    uint32_t pkg_version = esp_efuse_get_pkg_ver();
 
     switch (pkg_version) {
       case 0:              return F("ESP32-S2");
@@ -597,9 +611,9 @@ typedef struct {
         pkg_version = (word3 >> 21) & 0x0F
         return pkg_version
 */
-//    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PKG_VERSION);
-//    uint32_t pkg_version = chip_ver & 0x7;
-    uint32_t pkg_version = esp_efuse_get_pkg_ver();
+    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PKG_VERSION);
+    uint32_t pkg_version = chip_ver & 0x7;
+//    uint32_t pkg_version = esp_efuse_get_pkg_ver();
 
     switch (pkg_version) {
       case 0:              return F("ESP32-C3");
@@ -620,9 +634,9 @@ typedef struct {
         pkg_version = (word3 >> 21) & 0x0F
         return pkg_version
 */
-//    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PKG_VERSION);
-//    uint32_t pkg_version = chip_ver & 0x7;
-    uint32_t pkg_version = esp_efuse_get_pkg_ver();
+    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PKG_VERSION);
+    uint32_t pkg_version = chip_ver & 0x7;
+//    uint32_t pkg_version = esp_efuse_get_pkg_ver();
 
     switch (pkg_version) {
       case 0:              return F("ESP32-C6");
