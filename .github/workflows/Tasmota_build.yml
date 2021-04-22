@@ -2,7 +2,7 @@ name: Build_firmware
 
 on:
   push:
-    branches: master
+    branches: development
 
 jobs:
   tasmota_pull:
@@ -10,17 +10,17 @@ jobs:
     continue-on-error: true
     steps:
     - uses: actions/checkout@v1
-    - name: Use latest AIS-Tasmota  master
+    - name: Use latest AIS-Tasmota  development
       run: |
         git config --local user.name "Platformio BUILD"
-        git switch -c master
+        git switch -c work
         git remote add -f AIS-Tasmota "https://github.com/sviete/AIS-Tasmota.git"
-        git merge AIS-Tasmota/master --allow-unrelated-histories
-    - name: Push AIS-Tasmota   # Push updates of latest AIS-Tasmota master to repo
+        git merge AIS-Tasmota/development --allow-unrelated-histories
+    - name: Push AIS-Tasmota   # Push updates of latest AIS-Tasmota development to repo
       uses: ad-m/github-push-action@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: 'master'
+        branch: 'development'
         force: true
 
 
@@ -1496,8 +1496,8 @@ jobs:
         git config --local user.name "Platformio BUILD"
         git rm -r --cached .
         git add ./README.md
-        git add -f ./firmware/*.*
-        git commit -m "AIS-Tasmota ESP Binaries https://www.ai-speaker.com"
+        git add -f ./dev-firmware/*.*
+        git commit -m "AIS-Tasmota ESP DEV Binaries https://www.ai-speaker.com"
     - name: Push changes  # push the firmware files to branch firmware
       uses: ad-m/github-push-action@master
       with:
