@@ -1502,5 +1502,5 @@ jobs:
       uses: ad-m/github-push-action@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: 'firmware'
+        branch: 'dev-firmware'
         force: true
