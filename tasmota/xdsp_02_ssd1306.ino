@@ -47,8 +47,9 @@ extern uint8_t *buffer;
 
 /*********************************************************************************************/
 
-void SSD1306InitDriver(void)
-{
+void SSD1306InitDriver(void) {
+  if (!TasmotaGlobal.i2c_enabled) { return; }
+
   if (!Settings.display_model) {
     if (I2cSetDevice(OLED_ADDRESS1)) {
       Settings.display_address[0] = OLED_ADDRESS1;
@@ -70,11 +71,6 @@ void SSD1306InitDriver(void)
       Settings.display_height = 64;
     }
 
-    // allocate screen buffer
-    if (buffer) { free(buffer); }
-    buffer = (unsigned char*)calloc((Settings.display_width * Settings.display_height) / 8,1);
-    if (!buffer) { return; }
-
     // init renderer
     // oled1306 = new Adafruit_SSD1306(SSD1306_LCDWIDTH,SSD1306_LCDHEIGHT);
     oled1306 = new Adafruit_SSD1306(Settings.display_width, Settings.display_height, &Wire, Pin(GPIO_OLED_RESET));
@@ -92,6 +88,7 @@ void SSD1306InitDriver(void)
     renderer->DisplayOnff(1);
 #endif
 
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: SD1306"));
   }
 }
 
@@ -137,6 +134,7 @@ void Ssd1306Time(void)
   renderer->setCursor(0, 0);
   snprintf_P(line, sizeof(line), PSTR(" %02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);  // [ 12:34:56 ]
   renderer->println(line);
+  renderer->println();
   snprintf_P(line, sizeof(line), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);   // [01-02-2018]
   renderer->println(line);
   renderer->Updateframe();

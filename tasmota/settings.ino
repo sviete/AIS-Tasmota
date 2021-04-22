@@ -707,10 +707,11 @@ void SettingsDefaultSet2(void) {
 
   // this little trick allows GCC to optimize the assignment by grouping values and doing only ORs
   SysBitfield   flag = { 0 };
-  SysBitfield2  flag2 = { 0 };
   SysBitfield3  flag3 = { 0 };
   SysBitfield4  flag4 = { 0 };
   SysBitfield5  flag5 = { 0 };
+  SysMBitfield1  flag2 = { 0 };
+  SysMBitfield2  mbflag2 = { 0 };
 
 #ifdef ESP8266
   Settings.gpio16_converted = 0xF5A0;
@@ -726,6 +727,7 @@ void SettingsDefaultSet2(void) {
   flag3.no_power_feedback |= APP_NO_RELAY_SCAN;
   flag3.fast_power_cycle_disable |= APP_DISABLE_POWERCYCLE;
   flag3.bootcount_update |= DEEPSLEEP_BOOTCOUNT;
+  flag3.mqtt_buttons |= MQTT_BUTTONS;
   Settings.save_data = SAVE_DATA;
   Settings.param[P_BACKLOG_DELAY] = MIN_BACKLOG_DELAY;
   Settings.param[P_BOOT_LOOP_OFFSET] = BOOT_LOOP_OFFSET;  // SetOption36
@@ -744,12 +746,16 @@ void SettingsDefaultSet2(void) {
   Settings.module = MODULE;
   Settings.fallback_module = FALLBACK_MODULE;
   ModuleDefault(WEMOS);
-//  for (uint32_t i = 0; i < ARRAY_SIZE(Settings.my_gp.io); i++) { Settings.my_gp.io[i] = GPIO_NONE; }
+//  for (uint32_t i = 0; i < nitems(Settings.my_gp.io); i++) { Settings.my_gp.io[i] = GPIO_NONE; }
   SettingsUpdateText(SET_FRIENDLYNAME1, PSTR(FRIENDLY_NAME));
   SettingsUpdateText(SET_FRIENDLYNAME2, PSTR(FRIENDLY_NAME"2"));
   SettingsUpdateText(SET_FRIENDLYNAME3, PSTR(FRIENDLY_NAME"3"));
   SettingsUpdateText(SET_FRIENDLYNAME4, PSTR(FRIENDLY_NAME"4"));
+  #ifdef DEVICE_NAME
+  SettingsUpdateText(SET_DEVICENAME, PSTR(DEVICE_NAME));
+  #else
   SettingsUpdateText(SET_DEVICENAME, SettingsText(SET_FRIENDLYNAME1));
+  #endif
   SettingsUpdateText(SET_OTAURL, PSTR(OTA_URL));
 
   // Power
@@ -833,6 +839,7 @@ void SettingsDefaultSet2(void) {
   flag.mqtt_sensor_retain |= MQTT_SENSOR_RETAIN;
   flag5.mqtt_info_retain |= MQTT_INFO_RETAIN;
   flag5.mqtt_state_retain |= MQTT_STATE_RETAIN;
+  flag5.mqtt_switches |= MQTT_SWITCHES;
 //  flag.mqtt_serial |= 0;
   flag.device_index_enable |= MQTT_POWER_FORMAT;
   flag3.time_append_timezone |= MQTT_APPEND_TIMEZONE;
@@ -862,6 +869,8 @@ void SettingsDefaultSet2(void) {
   memcpy_P(Settings.mqtt_fingerprint[1], default_fingerprint2, sizeof(default_fingerprint2));
   Settings.tele_period = TELE_PERIOD;
   Settings.mqttlog_level = MQTT_LOG_LEVEL;
+  Settings.mqtt_keepalive = MQTT_KEEPALIVE;
+  Settings.mqtt_socket_timeout = MQTT_SOCKET_TIMEOUT;
 
   // Energy
   flag.no_power_on_check |= ENERGY_VOLTAGE_ALWAYS;
@@ -997,6 +1006,9 @@ void SettingsDefaultSet2(void) {
 
   Settings.dimmer_step = DEFAULT_DIMMER_STEP;
 
+  // Device Groups
+  *(uint32_t *)&Settings.device_group_tie = 0x04030201;
+
   // Display
 //  Settings.display_model = 0;
   Settings.display_mode = 1;
@@ -1053,11 +1065,13 @@ void SettingsDefaultSet2(void) {
   // Tuya
   flag3.tuya_apply_o20 |= TUYA_SETOPTION_20;
   flag3.tuya_serial_mqtt_publish |= MQTT_TUYA_RECEIVED;
+  mbflag2.temperature_set_res |= TUYA_TEMP_SET_RES;
 
   flag3.buzzer_enable |= BUZZER_ENABLE;
   flag3.shutter_mode |= SHUTTER_SUPPORT;
   flag3.pcf8574_ports_inverted |= PCF8574_INVERT_PORTS;
   flag4.zigbee_use_names |= ZIGBEE_FRIENDLY_NAMES;
+  flag4.zigbee_distinct_topics |= ZIGBEE_DISTINCT_TOPICS;
   flag4.remove_zbreceived |= ZIGBEE_RMV_ZBRECEIVED;
   flag4.zb_index_ep |= ZIGBEE_INDEX_EP;
   flag4.mqtt_tls |= MQTT_TLS_ENABLED;
@@ -1072,6 +1086,7 @@ void SettingsDefaultSet2(void) {
   Settings.flag2 = flag2;
   Settings.flag3 = flag3;
   Settings.flag4 = flag4;
+  Settings.flag5 = flag5;
 }
 
 /********************************************************************************************/
@@ -1102,9 +1117,9 @@ void SettingsDefaultWebColor(void) {
 }
 
 void SettingsEnableAllI2cDrivers(void) {
-  Settings.i2c_drivers[0] = 0xFFFFFFFF;
-  Settings.i2c_drivers[1] = 0xFFFFFFFF;
-  Settings.i2c_drivers[2] = 0xFFFFFFFF;
+  Settings.i2c_drivers[0] = I2CDRIVERS_0_31;
+  Settings.i2c_drivers[1] = I2CDRIVERS_32_63;
+  Settings.i2c_drivers[2] = I2CDRIVERS_64_95;
 }
 
 /********************************************************************************************/
@@ -1216,7 +1231,7 @@ void SettingsDelta(void) {
     if (Settings.version < 0x09000002) {
       char parameters[32];
       snprintf_P(parameters, sizeof(parameters), PSTR("%d,%d,%d,%d,%d"),
-        Settings.ex_adc_param_type, Settings.ex_adc_param1, Settings.ex_adc_param2, Settings.ex_adc_param3, Settings.ex_adc_param4);
+        Settings.ex_adc_param_type, Settings.ex_adc_param1, Settings.ex_adc_param2, Settings.ex_adc_param3, Settings.mbflag2.data);
       SettingsUpdateText(SET_ADC_PARAM1, parameters);
     }
 #endif  // ESP8266
@@ -1236,6 +1251,13 @@ void SettingsDelta(void) {
     }
     if (Settings.version < 0x09020007) {
       *(uint32_t *)&Settings.device_group_tie = 0x04030201;
+    }
+    if (Settings.version < 0x09030102) {
+      Settings.mqtt_keepalive = MQTT_KEEPALIVE;
+      Settings.mqtt_socket_timeout = MQTT_SOCKET_TIMEOUT;
+    }
+    if (Settings.version < 0x09030104) {
+      Settings.mbflag2.data = 0;
     }
 
     // AIS dom - safeguard to prevent soft bricking during the migration path violation

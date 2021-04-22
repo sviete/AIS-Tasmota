@@ -187,6 +187,10 @@ virtual void
   /************************************************************************/
   int16_t height(void) const { return _height; }
 
+  void setwidth(uint16_t w);
+
+  void setheight(uint16_t h);
+
   /************************************************************************/
   /*!
     @brief      Get rotation setting for display
@@ -216,7 +220,7 @@ virtual void
   uint16_t
     textcolor,      ///< 16-bit background color for print()
     textbgcolor;    ///< 16-bit text color for print()
-
+    uint8_t *framebuffer;
  protected:
   void
     charBounds(char c, int16_t *x, int16_t *y,

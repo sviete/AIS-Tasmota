@@ -25,7 +25,6 @@
 
 #define SPRINT(A) char str[32];sprintf(str,"val: %d ",A);Serial.println((char*)str);
 
-extern uint8_t *buffer;
 
 #define XDSP_07                7
 #define XI2C_06                6            // See I2CDEVICES.md
@@ -48,8 +47,9 @@ Adafruit_SH1106 *oled1106;
 /*********************************************************************************************/
 
 
-void SH1106InitDriver()
-{
+void SH1106InitDriver() {
+  if (!TasmotaGlobal.i2c_enabled) { return; }
+
   if (!Settings.display_model) {
     if (I2cSetDevice(OLED_ADDRESS1)) {
       Settings.display_address[0] = OLED_ADDRESS1;
@@ -70,15 +70,9 @@ void SH1106InitDriver()
     if (Settings.display_height != SH1106_LCDHEIGHT) {
       Settings.display_height = SH1106_LCDHEIGHT;
     }
-
-    // allocate screen buffer
-    if (buffer) free(buffer);
-    buffer=(unsigned char*)calloc((SH1106_LCDWIDTH * SH1106_LCDHEIGHT) / 8,1);
-    if (!buffer) return;
-
     // init renderer
     oled1106 = new Adafruit_SH1106(SH1106_LCDWIDTH,SH1106_LCDHEIGHT);
-    renderer=oled1106;
+    renderer = oled1106;
     renderer->Begin(SH1106_SWITCHCAPVCC, Settings.display_address[0],0);
     renderer->DisplayInit(DISPLAY_INIT_MODE,Settings.display_size,Settings.display_rotate,Settings.display_font);
     renderer->setTextColor(1,0);
@@ -92,6 +86,8 @@ void SH1106InitDriver()
     renderer->DisplayOnff(1);
 #endif
   }
+
+  AddLog(LOG_LEVEL_INFO, PSTR("DSP: SH1106"));
 }
 
 
@@ -137,6 +133,7 @@ void SH1106Time(void)
   renderer->setCursor(0, 0);
   snprintf_P(line, sizeof(line), PSTR(" %02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);  // [ 12:34:56 ]
   renderer->println(line);
+  renderer->println();
   snprintf_P(line, sizeof(line), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);   // [01-02-2018]
   renderer->println(line);
   renderer->Updateframe();

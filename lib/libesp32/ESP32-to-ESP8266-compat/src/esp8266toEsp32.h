@@ -89,6 +89,7 @@ inline void analogAttach(uint32_t pin, uint32_t channel) {
 inline void analogWrite(uint8_t pin, int val)
 {
   uint32_t channel = _analog_pin2chan(pin);
+  if ( val >> (_pwm_bit_num-1) ) ++val;
   ledcWrite(channel + PWM_CHANNEL_OFFSET, val);
 //  Serial.printf("write %d - %d\n",channel,val);
 }
@@ -114,10 +115,6 @@ typedef int SerConfu8;
 typedef int SerialConfig;
 //#define analogWrite(a, b)
 
-//
-// WS2812
-//
-#define NeoEsp8266BitBang800KbpsMethod NeoEsp32BitBang800KbpsMethod
 //
 // UDP
 //

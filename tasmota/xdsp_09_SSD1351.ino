@@ -34,7 +34,6 @@
 #include <SSD1351.h>
 
 bool ssd1351_init_done = false;
-extern uint8_t *buffer;
 extern uint8_t color_type;
 SSD1351 *ssd1351;
 
@@ -53,18 +52,16 @@ void SSD1351_InitDriver() {
       Settings.display_height = SSD1351_HEIGHT;
     }
 
-    buffer = 0;
-
     // default colors
     fg_color = SSD1351_WHITE;
     bg_color = SSD1351_BLACK;
 
     // init renderer
     if (TasmotaGlobal.soft_spi_enabled){
-      ssd1351 = new SSD1351(Pin(GPIO_SSD1351_CS), Pin(GPIO_SSPI_MOSI), Pin(GPIO_SSPI_SCLK));
+      ssd1351 = new SSD1351(Pin(GPIO_SSD1351_CS), Pin(GPIO_SSPI_MOSI), Pin(GPIO_SSPI_SCLK), Pin(GPIO_SSD1351_DC));
     }
     else if (TasmotaGlobal.spi_enabled) {
-      ssd1351 = new SSD1351(Pin(GPIO_SSD1351_CS), Pin(GPIO_SPI_MOSI), Pin(GPIO_SPI_CLK));
+      ssd1351 = new SSD1351(Pin(GPIO_SSD1351_CS), Pin(GPIO_SPI_MOSI), Pin(GPIO_SPI_CLK), Pin(GPIO_SSD1351_DC));
     }
 
     delay(100);
@@ -126,6 +123,7 @@ void SSD1351Time(void) {
   renderer->setCursor(0, 0);
   snprintf_P(line, sizeof(line), PSTR(" %02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);  // [ 12:34:56 ]
   renderer->println(line);
+  renderer->println();
   snprintf_P(line, sizeof(line), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);   // [01-02-2018]
   renderer->println(line);
   renderer->Updateframe();
