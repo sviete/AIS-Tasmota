@@ -50,8 +50,8 @@
 #define PROJECT                "ais-dom"          // PROJECT is used as the default topic delimiter
 
 // If not selected the default will be SONOFF_BASIC
-#define MODULE                 SONOFF_S2X      // [Module] Select default module from tasmota_template.h
 #ifdef ESP8266
+#define MODULE                 SONOFF_S2X      // [Module] Select default module from tasmota_template.h
 #define FALLBACK_MODULE        SONOFF_S2X      // [Module2] Select default module on fast reboot where USER_MODULE is user template
 //#define USER_TEMPLATE "{\"NAME\":\"Generic\",\"GPIO\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1],\"FLAG\":0,\"BASE\":18}"  // [Template] Set JSON template
 #endif  // ESP8266
