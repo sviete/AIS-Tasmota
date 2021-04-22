@@ -27,11 +27,11 @@ const uint32_t BERRY_MAX_LOGS = 16;   // max number of print output recorded whe
 
 /*********************************************************************************************\
  * Native functions mapped to Berry functions
- *
+ * 
  * log(msg:string [,log_level:int]) ->nil
- *
+ * 
  * import tasmota
- *
+ * 
  * tasmota.get_free_heap() -> int
  * tasmota.publish(topic:string, payload:string[, retain:bool]) -> nil
  * tasmota.cmd(command:string) -> string
@@ -39,12 +39,12 @@ const uint32_t BERRY_MAX_LOGS = 16;   // max number of print output recorded whe
  * tasmota.millis([delay:int]) -> int
  * tasmota.time_reached(timer:int) -> bool
  * tasmota.yield() -> nil
- *
+ * 
  * tasmota.get_light([index:int = 0]) -> map
  * tasmota.get_power([index:int = 0]) -> bool
  * tasmota.set_power(idx:int, power:bool) -> bool or nil
  * tasmota.set_light(idx:int, values:map) -> map
- *
+ * 
 \*********************************************************************************************/
 extern "C" {
   // Berry: `tasmota.publish(topic, payload [,retain]) -> nil``
@@ -194,7 +194,7 @@ extern "C" {
     ResponseCmndDone();
     be_return_nil(vm);
   }
-
+  
   int32_t l_respCmndError(bvm *vm);
   int32_t l_respCmndError(bvm *vm) {
     ResponseCmndError();
@@ -295,9 +295,9 @@ extern "C" {
 
 /*********************************************************************************************\
  * Native functions mapped to Berry functions
- *
+ * 
  * log(msg:string [,log_level:int]) ->nil
- *
+ * 
 \*********************************************************************************************/
 extern "C" {
   // Berry: `log(msg:string [,log_level:int]) ->nil`
@@ -363,10 +363,10 @@ void berry_log(const char * berry_buf) {
 
 /*********************************************************************************************\
  * Helper function for `Driver` class
- *
+ * 
  * get_tasmota() -> tasmota instance from globals
  *   allows to use solidified methods refering to the global object `tasmota`
- *
+ * 
 \*********************************************************************************************/
 extern "C" {
 

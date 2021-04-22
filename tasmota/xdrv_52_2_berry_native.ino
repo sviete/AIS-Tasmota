@@ -153,18 +153,18 @@ extern "C" {
 
 /*********************************************************************************************\
  * Automatically parse Berry stack and call the C function accordingly
- *
+ * 
  * This function takes the n incoming arguments and pushes them as arguments
  * on the stack for the C function:
  * - be_int -> int32_t
  * - be_bool -> int32_t with value 0/1
  * - be_string -> const char *
  * - be_instance -> gets the member ".p" and pushes as void*
- *
+ * 
  * This works because C silently ignores any unwanted arguments.
  * There is a strong requirements that all ints and pointers are 32 bits.
  * Float is not supported but could be added. Double cannot be supported because they are 64 bits
- *
+ * 
  * Optional argument:
  * - return_type: the C function return value is int32_t and is converted to the
  *   relevant Berry object depending on this char:
@@ -173,7 +173,7 @@ extern "C" {
  *   'b' be_boot
  *   's' be_str
  *   'o' instance of `lv_obj` (needs to be improved)
- *
+ * 
  * - arg_type: optionally check the types of input arguments, or throw an error
  *   string of argument types, '+' marks optional arguments
  *   '.' don't care
@@ -181,7 +181,7 @@ extern "C" {
  *   'b' be_bool
  *   's' be_string
  *   'o' be_instance
- *
+ * 
  * Ex: "oii+s" takes 3 mandatory arguments (obj_instance, int, int) and an optional fourth one [,string]
 \*********************************************************************************************/
 // general form of lv_obj_t* function, up to 4 parameters

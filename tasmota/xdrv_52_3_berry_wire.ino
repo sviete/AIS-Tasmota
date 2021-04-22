@@ -45,11 +45,11 @@ int32_t getBus(bvm *vm) {
 
 /*********************************************************************************************\
  * Native functions mapped to Berry functions
- *
+ * 
  * import wire
- *
+ * 
  * wire.get_free_heap() -> int
- *
+ * 
 \*********************************************************************************************/
 extern "C" {
 #ifdef USE_I2C
@@ -104,7 +104,7 @@ extern "C" {
   int32_t b_wire_requestfrom(struct bvm *vm) {
     int32_t top = be_top(vm); // Get the number of arguments
     TwoWire & myWire = getWire(vm);
-    if ( (top == 3 || (top == 4 && be_isbool(vm, 4)))
+    if ( (top == 3 || (top == 4 && be_isbool(vm, 4))) 
          && be_isint(vm, 2) && be_isint(vm, 3) ) {
       int32_t address = be_toint(vm, 2);
       int32_t quantity = be_toint(vm, 3);
@@ -242,7 +242,7 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 #else // USE_I2C
-  //
+  // 
   int32_t b_wire_i2cmissing(struct bvm *vm);
   int32_t b_wire_i2cmissing(struct bvm *vm) {
     be_raise(vm, "feature_error", "I2C is not enabled, use '#define USE_I2C'");
