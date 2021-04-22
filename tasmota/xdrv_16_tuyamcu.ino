@@ -91,19 +91,19 @@ struct TUYA {
 #define D_CMND_TUYARGB "RGB"
 #define D_CMND_TUYA_ENUM "Enum"
 #define D_CMND_TUYA_ENUM_LIST "EnumList"
-#define D_CMND_TUYA_SET_TEMP "SetTemp"
-#define D_CMND_TUYA_SET_HUM "SetHum"
-#define D_CMND_TUYA_SET_TIMER "SetTimer"
+// #define D_CMND_TUYA_SET_TEMP "SetTemp"
+// #define D_CMND_TUYA_SET_HUM "SetHum"
+// #define D_CMND_TUYA_SET_TIMER "SetTimer"
 
-const char kTuyaSensors[] PROGMEM = // Lit of available sensors (can be expanded in the future)
+const char kTuyaSensors[] PROGMEM = // List of available sensors (can be expanded in the future)
   "" D_JSON_TEMPERATURE "|TempSet|" D_JSON_HUMIDITY "|HumSet|" D_JSON_ILLUMINANCE
-  "|" D_JSON_TVOC "|" D_JSON_ECO2 "|" D_JSON_CO2 "|||Timer1|Timer2|Timer3|TImer4";
+  "|" D_JSON_TVOC "|" D_JSON_ECO2 "|" D_JSON_CO2 "|" D_JSON_GAS "||Timer1|Timer2|Timer3|TImer4";
 
 const char kTuyaCommand[] PROGMEM = D_PRFX_TUYA "|"  // Prefix
-  D_CMND_TUYA_MCU "|" D_CMND_TUYA_MCU_SEND_STATE "|" D_CMND_TUYARGB "|" D_CMND_TUYA_ENUM "|" D_CMND_TUYA_ENUM_LIST;
+  D_CMND_TUYA_MCU "|" D_CMND_TUYA_MCU_SEND_STATE "|" D_CMND_TUYARGB "|" D_CMND_TUYA_ENUM "|" D_CMND_TUYA_ENUM_LIST "|TempSetRes";
 
 void (* const TuyaCommand[])(void) PROGMEM = {
-  &CmndTuyaMcu, &CmndTuyaSend, &CmndTuyaRgb, &CmndTuyaEnum, &CmndTuyaEnumList
+  &CmndTuyaMcu, &CmndTuyaSend, &CmndTuyaRgb, &CmndTuyaEnum, &CmndTuyaEnumList, &CmndTuyaTempSetRes
 };
 
 /*********************************************************************************************\
@@ -242,6 +242,14 @@ void CmndTuyaRgb(void) { // Command to control the RGB format
   ResponseCmndNumber(Settings.tuya_fnid_map[230].dpid);
 }
 
+void CmndTuyaTempSetRes(void)
+{
+  if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 3)) {
+    Settings.mbflag2.temperature_set_res = XdrvMailbox.payload;
+  }
+  ResponseCmndNumber(Settings.mbflag2.temperature_set_res);
+}
+
 void CmndTuyaEnum(void) { // Command to control up to four type 4 Enum
   uint16_t EnumIdx = XdrvMailbox.index;
   int32_t payload = XdrvMailbox.payload;
@@ -268,7 +276,7 @@ void CmndTuyaEnum(void) { // Command to control up to four type 4 Enum
         if (added) {
           ResponseAppend_P(PSTR(","));
         }
-        ResponseAppend_P(PSTR("\"Enum%d\":%d"), i + 1, Tuya.EnumState[i]); // Returns the avtual values of Enum as list
+        ResponseAppend_P(PSTR("\"Enum%d\":%d"), i + 1, Tuya.EnumState[i]); // Returns the actual values of Enum as list
         added = true;
       }
     }
@@ -330,12 +338,13 @@ float TuyaAdjustedTemperature(int16_t packetValue, uint8_t res)
         break;
     case 3:
         return (float)packetValue / 1000.0;
-        break;    
+        break;
     default:
         return (float)packetValue;
         break;
-    } 
+    }
 }
+
 /*********************************************************************************************\
  * Internal Functions
 \*********************************************************************************************/
@@ -386,13 +395,13 @@ inline bool TuyaFuncIdValid(uint8_t fnId) {
   return (fnId >= TUYA_MCU_FUNC_SWT1 && fnId <= TUYA_MCU_FUNC_SWT4) ||
           (fnId >= TUYA_MCU_FUNC_REL1 && fnId <= TUYA_MCU_FUNC_REL8) ||
           (fnId >= TUYA_MCU_FUNC_DIMMER && fnId <= TUYA_MCU_FUNC_REPORT2) ||
-          (fnId >= TUYA_MCU_FUNC_POWER && fnId <= TUYA_MCU_FUNC_BATTERY_PERCENTAGE) ||
+          (fnId >= TUYA_MCU_FUNC_POWER && fnId <= TUYA_MCU_FUNC_POWER_TOTAL) ||
           (fnId >= TUYA_MCU_FUNC_REL1_INV && fnId <= TUYA_MCU_FUNC_REL8_INV) ||
           (fnId >= TUYA_MCU_FUNC_ENUM1 && fnId <= TUYA_MCU_FUNC_ENUM4) ||
           (fnId >= TUYA_MCU_FUNC_MOTOR_DIR && fnId <= TUYA_MCU_FUNC_DUMMY) ||
           (fnId == TUYA_MCU_FUNC_LOWPOWER_MODE) ||
           (fnId >= TUYA_MCU_FUNC_TEMP && fnId <= TUYA_MCU_FUNC_HUMSET) ||
-          (fnId >= TUYA_MCU_FUNC_LX && fnId <= TUYA_MCU_FUNC_ECO2) ||
+          (fnId >= TUYA_MCU_FUNC_LX && fnId <= TUYA_MCU_FUNC_GAS) ||
           (fnId >= TUYA_MCU_FUNC_TIMER1 && fnId <= TUYA_MCU_FUNC_TIMER4);
 }
 uint8_t TuyaGetFuncId(uint8_t dpid) {
@@ -623,6 +632,10 @@ void LightSerialDuty(uint16_t duty, char *hex_char, uint8_t TuyaIdx)
       } else { dpid = TuyaGetDpId(TUYA_MCU_FUNC_DIMMER2); }
     }
 
+    if (Tuya.ignore_dim && Tuya.ignore_dimmer_cmd_timeout < millis()) {
+      Tuya.ignore_dim = false;
+    }
+
     if (duty > 0 && !Tuya.ignore_dim && TuyaSerial && dpid > 0) {
       if (TuyaIdx == 2 && CTLight) {
         duty = changeUIntScale(duty, Tuya.CTMin, Tuya.CTMax, Settings.dimmer_hw_max, 0);
@@ -693,13 +706,41 @@ void TuyaProcessStatePacket(void) {
   uint8_t fnId;
   uint16_t dpDataLen;
   bool PowerOff = false;
+  bool tuya_energy_enabled = (XNRG_32 == TasmotaGlobal.energy_driver);
 
   while (dpidStart + 4 < Tuya.byte_counter) {
     dpDataLen = Tuya.buffer[dpidStart + 2] << 8 | Tuya.buffer[dpidStart + 3];
     fnId = TuyaGetFuncId(Tuya.buffer[dpidStart]);
 
     AddLog(LOG_LEVEL_DEBUG, PSTR("TYA: fnId=%d is set for dpId=%d"), fnId, Tuya.buffer[dpidStart]);
-      if (Tuya.buffer[dpidStart + 1] == 1) {  // Data Type 1
+    if (Tuya.buffer[dpidStart + 1] == 0) {
+#ifdef USE_ENERGY_SENSOR
+        if (tuya_energy_enabled && fnId == TUYA_MCU_FUNC_POWER_COMBINED) {
+          if (dpDataLen == 8) {
+            uint16_t tmpVol = Tuya.buffer[dpidStart + 4] << 8 | Tuya.buffer[dpidStart + 5];
+            uint16_t tmpCur = Tuya.buffer[dpidStart + 7] << 8 | Tuya.buffer[dpidStart + 8];
+            uint16_t tmpPow = Tuya.buffer[dpidStart + 10] << 8 | Tuya.buffer[dpidStart + 11];
+          Energy.voltage[0] = (float)tmpVol / 10;
+          Energy.current[0] = (float)tmpCur / 1000;
+          Energy.active_power[0] = (float)tmpPow;
+          AddLog(LOG_LEVEL_DEBUG, PSTR("TYA: Rx ID=%d Voltage=%d"), Tuya.buffer[dpidStart], tmpVol);
+          AddLog(LOG_LEVEL_DEBUG, PSTR("TYA: Rx ID=%d Current=%d"), Tuya.buffer[dpidStart], tmpCur);
+          AddLog(LOG_LEVEL_DEBUG, PSTR("TYA: Rx ID=%d Active_Power=%d"), Tuya.buffer[dpidStart], tmpPow);
+
+          if (RtcTime.valid) {
+            if (Tuya.lastPowerCheckTime != 0 && Energy.active_power[0] > 0) {
+              Energy.kWhtoday += (float)Energy.active_power[0] * (Rtc.utc_time - Tuya.lastPowerCheckTime) / 36;
+              EnergyUpdateToday();
+            }
+            Tuya.lastPowerCheckTime = Rtc.utc_time;
+          }
+        } else {
+          AddLog(LOG_LEVEL_DEBUG, PSTR("TYA: Rx ID=%d INV_LEN=%d"), Tuya.buffer[dpidStart], dpDataLen);
+        }
+        }
+        #endif // USE_ENERGY_SENSOR
+    }
+    else if (Tuya.buffer[dpidStart + 1] == 1) {  // Data Type 1
 
         if (fnId >= TUYA_MCU_FUNC_REL1 && fnId <= TUYA_MCU_FUNC_REL8) {
           AddLog(LOG_LEVEL_DEBUG, PSTR("TYA: RX Relay-%d --> MCU State: %s Current State:%s"), fnId - TUYA_MCU_FUNC_REL1 + 1, Tuya.buffer[dpidStart + 4]?"On":"Off",bitRead(TasmotaGlobal.power, fnId - TUYA_MCU_FUNC_REL1)?"On":"Off");
@@ -724,7 +765,6 @@ void TuyaProcessStatePacket(void) {
         if (PowerOff) { Tuya.ignore_dimmer_cmd_timeout = millis() + 250; }
       }
       else if (Tuya.buffer[dpidStart + 1] == 2) {  // Data Type 2
-        bool tuya_energy_enabled = (XNRG_32 == TasmotaGlobal.energy_driver);
         uint16_t packetValue = Tuya.buffer[dpidStart + 6] << 8 | Tuya.buffer[dpidStart + 7];
         uint8_t dimIndex;
         bool SnsUpdate = false;
@@ -747,7 +787,11 @@ void TuyaProcessStatePacket(void) {
           } else {
             if (fnId > 74) {
               res = 0;
-            } else { res = Settings.flag2.temperature_resolution; }
+            } else if (fnId == 72) {
+              res = Settings.mbflag2.temperature_set_res;
+            } else {
+              res = Settings.flag2.temperature_resolution;
+            }
             GetTextIndexed(sname, sizeof(sname), (fnId-71), kTuyaSensors);
             ResponseClear(); // Clear retained message
             Response_P(PSTR("{\"TuyaSNS\":{\"%s\":%s}}"), sname, dtostrfd(TuyaAdjustedTemperature(packetValue, res), res, tempval)); // sensor update is just on change
@@ -820,6 +864,9 @@ void TuyaProcessStatePacket(void) {
             }
             Tuya.lastPowerCheckTime = Rtc.utc_time;
           }
+        } else if (tuya_energy_enabled && fnId == TUYA_MCU_FUNC_POWER_TOTAL) {
+          EnergyUpdateTotal((float)packetValue / 100,true);
+          AddLog(LOG_LEVEL_DEBUG, PSTR("TYA: Rx ID=%d Total_Power=%d"), Tuya.buffer[dpidStart], packetValue);
         }
   #endif // USE_ENERGY_SENSOR
       }
@@ -858,6 +905,7 @@ void TuyaProcessStatePacket(void) {
             ExecuteCommand(scmnd, SRC_SWITCH);
           }
         }
+
       }
       else if (Tuya.buffer[dpidStart + 1] == 4) {  // Data Type 4
         const unsigned char *dpData = (unsigned char*)&Tuya.buffer[dpidStart + 4];
@@ -951,7 +999,7 @@ void TuyaNormalPowerModePacketProcess(void)
         uint8_t key1_gpio = Tuya.buffer[7];
         bool key1_set = false;
         bool led1_set = false;
-        for (uint32_t i = 0; i < ARRAY_SIZE(Settings.my_gp.io); i++) {
+        for (uint32_t i = 0; i < nitems(Settings.my_gp.io); i++) {
           if (Settings.my_gp.io[i] == AGPIO(GPIO_LED1)) led1_set = true;
           else if (Settings.my_gp.io[i] == AGPIO(GPIO_KEY1)) key1_set = true;
         }
@@ -1155,7 +1203,7 @@ void TuyaSerialInput(void)
       } else {
         AddLog_P(LOG_LEVEL_DEBUG, TasmotaGlobal.mqtt_data);
       }
-      XdrvRulesProcess();
+      XdrvRulesProcess(0);
 
       if (dpId != 0 && Settings.tuyamcu_topic) { // Publish a /STAT Topic ready to use for any home automation system
         if (!Tuya.SuspendTopic) {
@@ -1269,11 +1317,11 @@ bool Xnrg32(uint8_t function)
 
   if (TUYA_DIMMER == TasmotaGlobal.module_type) {
     if (FUNC_PRE_INIT == function) {
-      if (TuyaGetDpId(TUYA_MCU_FUNC_POWER) != 0) {
-        if (TuyaGetDpId(TUYA_MCU_FUNC_CURRENT) == 0) {
+      if (TuyaGetDpId(TUYA_MCU_FUNC_POWER) != 0 || TuyaGetDpId(TUYA_MCU_FUNC_POWER_COMBINED) != 0) {
+        if (TuyaGetDpId(TUYA_MCU_FUNC_CURRENT) == 0 && TuyaGetDpId(TUYA_MCU_FUNC_POWER_COMBINED) == 0) {
           Energy.current_available = false;
         }
-        if (TuyaGetDpId(TUYA_MCU_FUNC_VOLTAGE) == 0) {
+        if (TuyaGetDpId(TUYA_MCU_FUNC_VOLTAGE) == 0 && TuyaGetDpId(TUYA_MCU_FUNC_POWER_COMBINED) == 0) {
           Energy.voltage_available = false;
         }
         TasmotaGlobal.energy_driver = XNRG_32;
@@ -1309,7 +1357,11 @@ void TuyaSensorsShow(bool json)
         }
         if (sensor > 74) {
           res = 0;
-        } else { res = Settings.flag2.temperature_resolution; }
+        } else if (sensor == 72) {
+          res = Settings.mbflag2.temperature_set_res;
+        } else {
+          res = Settings.flag2.temperature_resolution;
+        }
 
         GetTextIndexed(sname, sizeof(sname), (sensor-71), kTuyaSensors);
         ResponseAppend_P(PSTR("\"%s\":%s"), sname,
@@ -1325,14 +1377,14 @@ void TuyaSensorsShow(bool json)
             break;
           case 72:
             WSContentSend_PD(PSTR("{s}" D_TEMPERATURE " Set{m}%s " D_UNIT_DEGREE "%c{e}"),
-                            dtostrfd(TuyaAdjustedTemperature(Tuya.Sensors[1], Settings.flag2.temperature_resolution), Settings.flag2.temperature_resolution, tempval), TempUnit());
+                            dtostrfd(TuyaAdjustedTemperature(Tuya.Sensors[1], Settings.mbflag2.temperature_set_res), Settings.mbflag2.temperature_set_res, tempval), TempUnit());
             break;
           case 73:
-            WSContentSend_PD(HTTP_SNS_HUM, "", dtostrfd(Tuya.Sensors[2], Settings.flag2.temperature_resolution, tempval));
+            WSContentSend_PD(HTTP_SNS_HUM, "", dtostrfd(TuyaAdjustedTemperature(Tuya.Sensors[2], Settings.flag2.temperature_resolution), Settings.flag2.temperature_resolution, tempval));
             break;
           case 74:
             WSContentSend_PD(PSTR("{s}" D_HUMIDITY " Set{m}%s " D_UNIT_PERCENT "{e}"),
-                            dtostrfd(Tuya.Sensors[3], Settings.flag2.temperature_resolution, tempval));
+                            dtostrfd(TuyaAdjustedTemperature(Tuya.Sensors[3], Settings.flag2.temperature_resolution), Settings.flag2.temperature_resolution, tempval));
             break;
           case 75:
             WSContentSend_PD(HTTP_SNS_ILLUMINANCE, "", Tuya.Sensors[4]);
@@ -1345,6 +1397,9 @@ void TuyaSensorsShow(bool json)
             break;
           case 78:
             WSContentSend_PD(HTTP_SNS_CO2EAVG, "", Tuya.Sensors[7]);
+            break;
+          case 79:
+            WSContentSend_PD(HTTP_SNS_GAS, "", Tuya.Sensors[8]);
             break;
           case 81:
           case 82:

@@ -193,6 +193,8 @@ void ILI9341_2::init(uint16_t width, uint16_t height) {
     if (_hwspi > 2) {
       spi2->begin(_sclk, _miso, _mosi, -1);
     }
+#else
+    SPI.begin();
 #endif // ESP32
   } else {
 #ifdef ESP32
@@ -564,6 +566,28 @@ void ILI9341_2::invertDisplay(boolean i) {
   SPI_BEGIN_TRANSACTION();
   ILI9341_2_CS_LOW
   writecmd(i ? ILI9341_2_INVON : ILI9341_2_INVOFF);
+  ILI9341_2_CS_HIGH
+  SPI_END_TRANSACTION();
+}
+
+void ILI9341_2::reverseDisplay(boolean i) {
+  SPI_BEGIN_TRANSACTION();
+  ILI9341_2_CS_LOW
+  if (i) {
+    writecmd(ILI9341_2_FRMCTR1);
+    spiwrite(0x00);
+    spiwrite(0x13);
+    writecmd(ILI9341_2_MADCTL);
+    spiwrite(0x01);
+    spiwrite(0x08);
+  } else {
+    writecmd(ILI9341_2_FRMCTR1);
+    spiwrite(0x00);
+    spiwrite(0x18);
+    writecmd(ILI9341_2_MADCTL);
+    spiwrite(0x01);
+    spiwrite(0x48);
+  }
   ILI9341_2_CS_HIGH
   SPI_END_TRANSACTION();
 }
