@@ -35,7 +35,8 @@ void MqttDiscoverServer(void) {
   http.addHeader("id", String(TasmotaGlobal.mqtt_client));
   http.addHeader("ip", WiFi.localIP().toString().c_str());
   int httpCode = http.POST("");
-  if (httpCode > 0) {
+  if (httpCode == 200) {
+    AddLog(LOG_LEVEL_INFO, "AIS EASY: Połączono.");
     String line = http.getString();
       int s = line.indexOf("###a###");
       int e = line.indexOf("###d###");
