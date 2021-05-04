@@ -334,10 +334,11 @@ void setup(void) {
           Settings.my_gp.io[i] = GPIO_NONE;         // Reset user defined GPIO disabling sensors
         }
       }
-      if (RtcReboot.fast_reboot_count > Settings.param[P_BOOT_LOOP_OFFSET] +4) {  // Restarted 6 times
-        Settings.module = Settings.fallback_module;  // Reset module to fallback module
+// AIS dom do NOT reset module to fallback module
+//      if (RtcReboot.fast_reboot_count > Settings.param[P_BOOT_LOOP_OFFSET] +4) {  // Restarted 6 times
+//        Settings.module = Settings.fallback_module;  // Reset module to fallback module
 //        Settings.last_module = Settings.fallback_module;
-      }
+//      }
       AddLog(LOG_LEVEL_INFO, PSTR("FRC: " D_LOG_SOME_SETTINGS_RESET " (%d)"), RtcReboot.fast_reboot_count);
     }
   }
