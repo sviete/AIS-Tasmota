@@ -1,7 +1,7 @@
 /*
   xdsp_09_SSD1351.ino - Display SSD1351 support for Tasmota
 
-  Copyright (C) 2019  Gerhard Mutz and Theo Arends
+  Copyright (C) 2021  Gerhard Mutz and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -33,18 +33,17 @@
 
 #include <SSD1351.h>
 
-extern uint8_t *buffer;
+bool ssd1351_init_done = false;
 extern uint8_t color_type;
 SSD1351 *ssd1351;
 
 /*********************************************************************************************/
 
 void SSD1351_InitDriver() {
-  if (!Settings.display_model) {
-    Settings.display_model = XDSP_09;
-  }
+  if (PinUsed(GPIO_SSD1351_CS) &&
+     ((TasmotaGlobal.soft_spi_enabled & SPI_MOSI) || (TasmotaGlobal.spi_enabled & SPI_MOSI))) {
 
-  if (XDSP_09 == Settings.display_model) {
+    Settings.display_model = XDSP_09;
 
     if (Settings.display_width != SSD1351_WIDTH) {
       Settings.display_width = SSD1351_WIDTH;
@@ -53,25 +52,19 @@ void SSD1351_InitDriver() {
       Settings.display_height = SSD1351_HEIGHT;
     }
 
-    buffer=0;
-
     // default colors
     fg_color = SSD1351_WHITE;
     bg_color = SSD1351_BLACK;
 
     // init renderer
-    if  ((pin[GPIO_SSPI_CS]<99) && (pin[GPIO_SSPI_MOSI]<99) && (pin[GPIO_SSPI_SCLK]<99)){
-      ssd1351  = new SSD1351(pin[GPIO_SSPI_CS],pin[GPIO_SSPI_MOSI],pin[GPIO_SSPI_SCLK]);
-    } else {
-      if  ((pin[GPIO_SPI_CS]<99) && (pin[GPIO_SPI_MOSI]<99) && (pin[GPIO_SPI_CLK]<99)){
-        ssd1351  = new SSD1351(pin[GPIO_SPI_CS],pin[GPIO_SPI_MOSI],pin[GPIO_SPI_CLK]);
-      } else {
-        return;
-      }
+    if (TasmotaGlobal.soft_spi_enabled){
+      ssd1351 = new SSD1351(Pin(GPIO_SSD1351_CS), Pin(GPIO_SSPI_MOSI), Pin(GPIO_SSPI_SCLK), Pin(GPIO_SSD1351_DC));
+    }
+    else if (TasmotaGlobal.spi_enabled) {
+      ssd1351 = new SSD1351(Pin(GPIO_SSD1351_CS), Pin(GPIO_SPI_MOSI), Pin(GPIO_SPI_CLK), Pin(GPIO_SSD1351_DC));
     }
 
     delay(100);
-    SPI.begin();
     ssd1351->begin();
     renderer = ssd1351;
     renderer->DisplayInit(DISPLAY_INIT_MODE,Settings.display_size,Settings.display_rotate,Settings.display_font);
@@ -86,13 +79,15 @@ void SSD1351_InitDriver() {
 
 #endif
     color_type = COLOR_COLOR;
+
+    ssd1351_init_done = true;
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: SSD1351"));
   }
 }
 
 #ifdef USE_DISPLAY_MODES1TO5
 
-void SSD1351PrintLog(void)
-{
+void SSD1351PrintLog(void) {
   disp_refresh--;
   if (!disp_refresh) {
     disp_refresh = Settings.display_refresh;
@@ -112,8 +107,7 @@ void SSD1351PrintLog(void)
       strlcpy(disp_screen_buffer[last_row], txt, disp_screen_buffer_cols);
       DisplayFillScreen(last_row);
 
-      snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
-      AddLog(LOG_LEVEL_DEBUG);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
 
       renderer->println(disp_screen_buffer[last_row]);
       renderer->Updateframe();
@@ -121,8 +115,7 @@ void SSD1351PrintLog(void)
   }
 }
 
-void SSD1351Time(void)
-{
+void SSD1351Time(void) {
   char line[12];
 
   renderer->clearDisplay();
@@ -130,13 +123,13 @@ void SSD1351Time(void)
   renderer->setCursor(0, 0);
   snprintf_P(line, sizeof(line), PSTR(" %02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);  // [ 12:34:56 ]
   renderer->println(line);
+  renderer->println();
   snprintf_P(line, sizeof(line), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);   // [01-02-2018]
   renderer->println(line);
   renderer->Updateframe();
 }
 
-void SSD1351Refresh(void)  // Every second
-{
+void SSD1351Refresh(void) {     // Every second
   if (Settings.display_mode) {  // Mode 0 is User text
     switch (Settings.display_mode) {
       case 1:  // Time
@@ -153,18 +146,18 @@ void SSD1351Refresh(void)  // Every second
 }
 
 #endif  // USE_DISPLAY_MODES1TO5
-/*********************************************************************************************/
+
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
-bool Xdsp09(uint8_t function)
-{
+
+bool Xdsp09(uint8_t function) {
   bool result = false;
 
   if (FUNC_DISPLAY_INIT_DRIVER == function) {
       SSD1351_InitDriver();
   }
-  else if (XDSP_09 == Settings.display_model) {
+  else if (ssd1351_init_done && (XDSP_09 == Settings.display_model)) {
     switch (function) {
       case FUNC_DISPLAY_MODEL:
         result = true;

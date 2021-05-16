@@ -1,7 +1,7 @@
 /*
   xsns_41_max44009.ino - MAX44009 ambient light sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 \*********************************************************************************************/
 
 #define XSNS_41			           41
+#define XI2C_28                28  // See I2CDEVICES.md
 
 #define MAX44009_ADDR1         0x4A
 #define MAX44009_ADDR2         0x4B
@@ -65,23 +66,16 @@ bool Max4409Read_lum(void)
 
 void Max4409Detect(void)
 {
-  uint8_t reg[8];
-  bool failed = false;
-
-  if (max44009_found) {
-    return;
-  }
-
   uint8_t buffer1;
   uint8_t buffer2;
   for (uint32_t i = 0; 0 != max44009_addresses[i]; i++) {
 
     max44009_address = max44009_addresses[i];
+    if (I2cActive(max44009_address)) { continue; }
 
     if ((I2cValidRead8(&buffer1, max44009_address, REG_LOWER_THRESHOLD)) &&
         (I2cValidRead8(&buffer2, max44009_address, REG_THRESHOLD_TIMER))) {
-      //snprintf(log_data, sizeof(log_data), "MAX44009 %x: %x, %x", max44009_address, (int)buffer1, (int)buffer2);
-      //AddLog(LOG_LEVEL_DEBUG_MORE);
+      //AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("MAX44009 %x: %x, %x"), max44009_address, (int)buffer1, (int)buffer2);
       if ((0x00 == buffer1) &&
           (0xFF == buffer2)) {
 
@@ -93,8 +87,8 @@ void Max4409Detect(void)
         Wire.write(REG_CONFIG);
         Wire.write(MAX44009_CONTINUOUS_AUTO_MODE);
         if (0 == Wire.endTransmission()) {
+          I2cSetActiveFound(max44009_address, max44009_types);
           max44009_found = 1;
-          AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, max44009_types, max44009_address);
           break;
         }
       }
@@ -104,9 +98,7 @@ void Max4409Detect(void)
 
 void Max4409EverySecond(void)
 {
-  if (max44009_found) {
-    Max4409Read_lum();
-  }
+  Max4409Read_lum();
 }
 
 void Max4409Show(bool json)
@@ -130,7 +122,7 @@ void Max4409Show(bool json)
     if (json) {
       ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_ILLUMINANCE "\":%s}"), max44009_types, illum_str);
 #ifdef USE_DOMOTICZ
-      if (0 == tele_period) {
+      if (0 == TasmotaGlobal.tele_period) {
         DomoticzSensor(DZ_ILLUMINANCE, illum_str);
       }
 #endif  // USE_DOMOTICZ
@@ -149,24 +141,26 @@ void Max4409Show(bool json)
 
 bool Xsns41(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_28)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    Max4409Detect();
+  }
+  else if (max44009_found) {
     switch (function) {
-      case FUNC_INIT:
-        Max4409Detect();
-        break;
       case FUNC_EVERY_SECOND:
         Max4409EverySecond();
         break;
       case FUNC_JSON_APPEND:
         Max4409Show(1);
         break;
-#ifdef USE_WEBSERVER
+  #ifdef USE_WEBSERVER
       case FUNC_WEB_SENSOR:
         Max4409Show(0);
         break;
-#endif  // USE_WEBSERVER
+  #endif  // USE_WEBSERVER
     }
   }
   return result;

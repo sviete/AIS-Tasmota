@@ -1,7 +1,7 @@
 /*
   xdrv_08_serial_bridge.ino - serial bridge support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Dániel Zoltán Tolnai
+  Copyright (C) 2021  Theo Arends and Dániel Zoltán Tolnai
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -23,14 +23,15 @@
 \*********************************************************************************************/
 
 #define XDRV_08                    8
+#define HARDWARE_FALLBACK          2
 
 const uint8_t SERIAL_BRIDGE_BUFFER_SIZE = 130;
 
 const char kSerialBridgeCommands[] PROGMEM = "|"  // No prefix
   D_CMND_SSERIALSEND "|" D_CMND_SBAUDRATE;
 
-void (* const SerialBridgeCommand[])(void) PROGMEM =
-  { &CmndSSerialSend, &CmndSBaudrate };
+void (* const SerialBridgeCommand[])(void) PROGMEM = {
+  &CmndSSerialSend, &CmndSBaudrate };
 
 #include <TasmotaSerial.h>
 
@@ -54,27 +55,46 @@ void SerialBridgeInput(void)
       return;
     }
     if (serial_in_byte || serial_bridge_raw) {                                 // Any char between 1 and 127 or any char (0 - 255)
+      bool in_byte_is_delimiter =                                              // Char is delimiter when...
+        (((Settings.serial_delimiter < 128) && (serial_in_byte == Settings.serial_delimiter)) || // Any char between 1 and 127 and being delimiter
+        ((Settings.serial_delimiter == 128) && !isprint(serial_in_byte))) &&   // Any char not between 32 and 127
+        !serial_bridge_raw;                                                    // In raw mode (CMND_SERIALSEND3) there is never a delimiter
 
       if ((serial_bridge_in_byte_counter < SERIAL_BRIDGE_BUFFER_SIZE -1) &&    // Add char to string if it still fits and ...
-          ((isprint(serial_in_byte) && (128 == Settings.serial_delimiter)) ||  // Any char between 32 and 127
-          ((serial_in_byte != Settings.serial_delimiter) && (128 != Settings.serial_delimiter)) ||  // Any char between 1 and 127 and not being delimiter
-            serial_bridge_raw)) {                                              // Any char between 0 and 255
+          !in_byte_is_delimiter) {                                             // Char is not a delimiter
         serial_bridge_buffer[serial_bridge_in_byte_counter++] = serial_in_byte;
-        serial_bridge_polling_window = millis();                               // Wait for more data
-      } else {
+      }
+
+      if ((serial_bridge_in_byte_counter >= SERIAL_BRIDGE_BUFFER_SIZE -1) ||   // Send message when buffer is full or ...
+          in_byte_is_delimiter) {                                              // Char is delimiter
         serial_bridge_polling_window = 0;                                      // Publish now
         break;
       }
+
+      serial_bridge_polling_window = millis();                                 // Wait for more data
     }
   }
 
   if (serial_bridge_in_byte_counter && (millis() > (serial_bridge_polling_window + SERIAL_POLLING))) {
     serial_bridge_buffer[serial_bridge_in_byte_counter] = 0;                   // Serial data completed
-    char hex_char[(serial_bridge_in_byte_counter * 2) + 2];
-    Response_P(PSTR(",\"" D_JSON_SSERIALRECEIVED "\":\"%s\"}"),
-      (serial_bridge_raw) ? ToHex_P((unsigned char*)serial_bridge_buffer, serial_bridge_in_byte_counter, hex_char, sizeof(hex_char)) : serial_bridge_buffer);
-    MqttPublishPrefixTopic_P(RESULT_OR_TELE, PSTR(D_JSON_SSERIALRECEIVED));
-    XdrvRulesProcess();
+    bool assume_json = (!serial_bridge_raw && (serial_bridge_buffer[0] == '{'));
+
+    Response_P(PSTR("{\"" D_JSON_SSERIALRECEIVED "\":"));
+    if (assume_json) {
+      ResponseAppend_P(serial_bridge_buffer);
+    } else {
+      ResponseAppend_P(PSTR("\""));
+      if (serial_bridge_raw) {
+        char hex_char[(serial_bridge_in_byte_counter * 2) + 2];
+        ResponseAppend_P(ToHex_P((unsigned char*)serial_bridge_buffer, serial_bridge_in_byte_counter, hex_char, sizeof(hex_char)));
+      } else {
+        ResponseAppend_P(EscapeJSONString(serial_bridge_buffer).c_str());
+      }
+      ResponseAppend_P(PSTR("\""));
+    }
+    ResponseJsonEnd();
+
+    MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_TELE, PSTR(D_JSON_SSERIALRECEIVED));
     serial_bridge_in_byte_counter = 0;
   }
 }
@@ -84,12 +104,12 @@ void SerialBridgeInput(void)
 void SerialBridgeInit(void)
 {
   serial_bridge_active = false;
-  if ((pin[GPIO_SBR_RX] < 99) && (pin[GPIO_SBR_TX] < 99)) {
-    SerialBridgeSerial = new TasmotaSerial(pin[GPIO_SBR_RX], pin[GPIO_SBR_TX]);
+  if (PinUsed(GPIO_SBR_RX) && PinUsed(GPIO_SBR_TX)) {
+    SerialBridgeSerial = new TasmotaSerial(Pin(GPIO_SBR_RX), Pin(GPIO_SBR_TX), HARDWARE_FALLBACK);
     if (SerialBridgeSerial->begin(Settings.sbaudrate * 300)) {  // Baud rate is stored div 300 so it fits into 16 bits
       if (SerialBridgeSerial->hardwareSerial()) {
         ClaimSerial();
-        serial_bridge_buffer = serial_in_buffer;  // Use idle serial buffer to save RAM
+        serial_bridge_buffer = TasmotaGlobal.serial_in_buffer;  // Use idle serial buffer to save RAM
       } else {
         serial_bridge_buffer = (char*)(malloc(SERIAL_BRIDGE_BUFFER_SIZE));
       }
@@ -105,7 +125,7 @@ void SerialBridgeInit(void)
 
 void CmndSSerialSend(void)
 {
-  if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= 5)) {
+  if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= 6)) {
     serial_bridge_raw = (XdrvMailbox.index > 3);
     if (XdrvMailbox.data_len > 0) {
       if (1 == XdrvMailbox.index) {
@@ -132,6 +152,15 @@ void CmndSSerialSend(void)
           SerialBridgeSerial->write(code);                                  // "AA004566" as hex values
           size -= 2;
           codes += 2;
+        }
+      }
+      else if (6 == XdrvMailbox.index) {
+        char *p;
+        uint8_t code;
+        char *values = XdrvMailbox.data;
+        for (char* str = strtok_r(values, ",", &p); str; str = strtok_r(nullptr, ",", &p)) {
+          code = (uint8_t)atoi(str);
+          SerialBridgeSerial->write(code);                                  // "72,101,108,108"
         }
       }
       ResponseCmndDone();

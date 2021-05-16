@@ -1,7 +1,7 @@
 /*
   xsns_31_ccs811.ino - CCS811 gas and air quality sensor support for Tasmota
 
-  Copyright (C) 2019  Gerhard Mutz and Theo Arends
+  Copyright (C) 2021  Gerhard Mutz and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -28,19 +28,31 @@
 \*********************************************************************************************/
 
 #define XSNS_31             31
+#define XI2C_24             24  // See I2CDEVICES.md
+
+#define EVERYNSECONDS 5
 
 #include "Adafruit_CCS811.h"
 
 Adafruit_CCS811 ccs;
-uint8_t CCS811_ready;
-uint8_t CCS811_type;
+uint8_t CCS811_ready = 0;
+uint8_t CCS811_type = 0;;
 uint16_t eCO2;
 uint16_t TVOC;
 uint8_t tcnt = 0;
 uint8_t ecnt = 0;
 
 /********************************************************************************************/
-#define EVERYNSECONDS 5
+
+void CCS811Detect(void)
+{
+  if (I2cActive(CCS811_ADDRESS)) { return; }
+
+  if (!ccs.begin(CCS811_ADDRESS)) {
+    CCS811_type = 1;
+    I2cSetActiveFound(CCS811_ADDRESS, "CCS811");
+  }
+}
 
 void CCS811Update(void)  // Perform every n second
 {
@@ -48,30 +60,22 @@ void CCS811Update(void)  // Perform every n second
   if (tcnt >= EVERYNSECONDS) {
     tcnt = 0;
     CCS811_ready = 0;
-    if (!CCS811_type) {
-      sint8_t res = ccs.begin(CCS811_ADDRESS);
-      if (!res) {
-        CCS811_type = 1;
-        AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, "CCS811", 0x5A);
-      } else {
-        //AddLog_P2(LOG_LEVEL_DEBUG, "CCS811 init failed: %d",res);
+    if (ccs.available()) {
+      if (!ccs.readData()){
+        TVOC = ccs.getTVOC();
+        eCO2 = ccs.geteCO2();
+        CCS811_ready = 1;
+        if (TasmotaGlobal.global_update && (TasmotaGlobal.humidity > 0) && !isnan(TasmotaGlobal.temperature_celsius)) {
+          ccs.setEnvironmentalData((uint8_t)TasmotaGlobal.humidity, TasmotaGlobal.temperature_celsius);
+        }
+        ecnt = 0;
       }
     } else {
-      if (ccs.available()) {
-        if (!ccs.readData()){
-          TVOC = ccs.getTVOC();
-          eCO2 = ccs.geteCO2();
-          CCS811_ready = 1;
-          if (global_update && global_humidity>0 && global_temperature!=9999) { ccs.setEnvironmentalData((uint8_t)global_humidity, global_temperature); }
-          ecnt = 0;
-        }
-      } else {
-        // failed, count up
-        ecnt++;
-        if (ecnt > 6) {
-          // after 30 seconds, restart
-          ccs.begin(CCS811_ADDRESS);
-        }
+      // failed, count up
+      ecnt++;
+      if (ecnt > 6) {
+        // after 30 seconds, restart
+        ccs.begin(CCS811_ADDRESS);
       }
     }
   }
@@ -87,7 +91,7 @@ void CCS811Show(bool json)
     if (json) {
       ResponseAppend_P(PSTR(",\"CCS811\":{\"" D_JSON_ECO2 "\":%d,\"" D_JSON_TVOC "\":%d}"), eCO2,TVOC);
 #ifdef USE_DOMOTICZ
-      if (0 == tele_period) DomoticzSensor(DZ_AIRQUALITY, eCO2);
+      if (0 == TasmotaGlobal.tele_period) DomoticzSensor(DZ_AIRQUALITY, eCO2);
 #endif  // USE_DOMOTICZ
 #ifdef USE_WEBSERVER
     } else {
@@ -103,9 +107,14 @@ void CCS811Show(bool json)
 
 bool Xsns31(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_24)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    CCS811Detect();
+  }
+  else if (CCS811_type) {
     switch (function) {
       case FUNC_EVERY_SECOND:
         CCS811Update();

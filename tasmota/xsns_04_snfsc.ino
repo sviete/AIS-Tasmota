@@ -1,7 +1,7 @@
 /*
   xsns_04_snfsc.ino - sonoff SC support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -62,7 +62,7 @@ void SonoffScSend(const char *data)
 {
   Serial.write(data);
   Serial.write('\x1B');
-  AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_SERIAL D_TRANSMIT " %s"), data);
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_SERIAL D_TRANSMIT " %s"), data);
 }
 
 void SonoffScInit(void)
@@ -78,7 +78,7 @@ void SonoffScSerialInput(char *rcvstat)
   char *str;
   uint16_t value[5] = { 0 };
 
-  AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_SERIAL D_RECEIVED " %s"), rcvstat);
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_SERIAL D_RECEIVED " %s"), rcvstat);
 
   if (!strncasecmp_P(rcvstat, PSTR("AT+UPDATE="), 10)) {
     int8_t i = -1;
@@ -115,17 +115,13 @@ void SonoffScShow(bool json)
     float t = ConvertTemp(sc_value[1]);
     float h = ConvertHumidity(sc_value[0]);
 
-    char temperature[33];
-    dtostrfd(t, Settings.flag2.temperature_resolution, temperature);
-    char humidity[33];
-    dtostrfd(h, Settings.flag2.humidity_resolution, humidity);
-
     if (json) {
-      ResponseAppend_P(PSTR(",\"SonoffSC\":{\"" D_JSON_TEMPERATURE "\":%s,\"" D_JSON_HUMIDITY "\":%s,\"" D_JSON_LIGHT "\":%d,\"" D_JSON_NOISE "\":%d,\"" D_JSON_AIRQUALITY "\":%d}"),
-        temperature, humidity, sc_value[2], sc_value[3], sc_value[4]);
+      ResponseAppend_P(PSTR(",\"SonoffSC\":{"));
+      ResponseAppendTHD(t, h);
+      ResponseAppend_P(PSTR(",\"" D_JSON_LIGHT "\":%d,\"" D_JSON_NOISE "\":%d,\"" D_JSON_AIRQUALITY "\":%d}"), sc_value[2], sc_value[3], sc_value[4]);
 #ifdef USE_DOMOTICZ
-      if (0 == tele_period) {
-        DomoticzTempHumSensor(temperature, humidity);
+      if (0 == TasmotaGlobal.tele_period) {
+        DomoticzTempHumPressureSensor(t, h);
         DomoticzSensor(DZ_ILLUMINANCE, sc_value[2]);
         DomoticzSensor(DZ_COUNT, sc_value[3]);
         DomoticzSensor(DZ_AIRQUALITY, 500 + ((100 - sc_value[4]) * 20));
@@ -133,7 +129,7 @@ void SonoffScShow(bool json)
 #endif  // USE_DOMOTICZ
 
 #ifdef USE_KNX
-      if (0 == tele_period) {
+      if (0 == TasmotaGlobal.tele_period) {
         KnxSensor(KNX_TEMPERATURE, t);
         KnxSensor(KNX_HUMIDITY, h);
       }
@@ -141,8 +137,7 @@ void SonoffScShow(bool json)
 
 #ifdef USE_WEBSERVER
     } else {
-      WSContentSend_PD(HTTP_SNS_TEMP, "", temperature, TempUnit());
-      WSContentSend_PD(HTTP_SNS_HUM, "", humidity);
+      WSContentSend_THD("", t, h);
       WSContentSend_PD(HTTP_SNS_SCPLUS, sc_value[2], sc_value[3], sc_value[4]);
 #endif  // USE_WEBSERVER
     }
@@ -157,11 +152,8 @@ bool Xsns04(uint8_t function)
 {
   bool result = false;
 
-  if (SONOFF_SC == my_module_type) {
+  if (SONOFF_SC == TasmotaGlobal.module_type) {
     switch (function) {
-      case FUNC_INIT:
-        SonoffScInit();
-        break;
       case FUNC_JSON_APPEND:
         SonoffScShow(1);
         break;
@@ -170,6 +162,9 @@ bool Xsns04(uint8_t function)
         SonoffScShow(0);
         break;
 #endif  // USE_WEBSERVER
+      case FUNC_INIT:
+        SonoffScInit();
+        break;
     }
   }
   return result;

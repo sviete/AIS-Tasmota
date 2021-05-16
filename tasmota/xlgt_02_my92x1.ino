@@ -1,7 +1,7 @@
 /*
   xlgt_02_my92x1.ino - led support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -26,8 +26,8 @@
 #define XLGT_02             2
 
 struct MY92X1 {
-  uint8_t pdi_pin = 0;
-  uint8_t pdcki_pin = 0;
+  int8_t pdi_pin = 0;
+  int8_t pdcki_pin = 0;
   uint8_t model = 0;
 } My92x1;
 
@@ -115,9 +115,9 @@ bool My92x1SetChannels(void)
 
 void My92x1ModuleSelected(void)
 {
-  if ((pin[GPIO_DCKI] < 99) && (pin[GPIO_DI] < 99)) {
-    My92x1.pdi_pin = pin[GPIO_DI];
-    My92x1.pdcki_pin = pin[GPIO_DCKI];
+  if (PinUsed(GPIO_DCKI) && PinUsed(GPIO_DI)) {
+    My92x1.pdi_pin = Pin(GPIO_DI);
+    My92x1.pdcki_pin = Pin(GPIO_DCKI);
 
     pinMode(My92x1.pdi_pin, OUTPUT);
     pinMode(My92x1.pdcki_pin, OUTPUT);
@@ -125,20 +125,20 @@ void My92x1ModuleSelected(void)
     digitalWrite(My92x1.pdcki_pin, LOW);
 
     My92x1.model = 2;
-    light_type = LT_RGBW;                    // RGBW (2 chips) as used in Lohas
-    if (AILIGHT == my_module_type) {         // RGBW (1 chip) as used in Ailight
+    TasmotaGlobal.light_type = LT_RGBW;                    // RGBW (2 chips) as used in Lohas
+    if (AILIGHT == TasmotaGlobal.module_type) {         // RGBW (1 chip) as used in Ailight
       My92x1.model = 0;
-//      light_type = LT_RGBW;
+//      TasmotaGlobal.light_type = LT_RGBW;
     }
-    else if (SONOFF_B1 == my_module_type) {  // RGBWC (2 chips) as used in Sonoff B1
+    else if (SONOFF_B1 == TasmotaGlobal.module_type) {  // RGBWC (2 chips) as used in Sonoff B1
       My92x1.model = 1;
-      light_type = LT_RGBWC;
+      TasmotaGlobal.light_type = LT_RGBWC;
     }
 
     LightMy92x1Init();
 
-    light_flg = XLGT_02;
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("DBG: MY29x1 Found"));
+    TasmotaGlobal.light_driver = XLGT_02;
+    AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: MY29x1 Found"));
   }
 }
 

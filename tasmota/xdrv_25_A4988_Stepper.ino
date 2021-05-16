@@ -2,7 +2,7 @@
 /*
   xdrv_25_a4988_stepper.ino - A4988 StepMotorDriverCircuit- support for Tasmota
 
-  Copyright (C) 2019  Tim Leuscher and Theo Arends
+  Copyright (C) 2021  Tim Leuscher and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -27,12 +27,12 @@
 
 #include <A4988_Stepper.h>
 
-short A4988_dir_pin = pin[GPIO_MAX];
-short A4988_stp_pin = pin[GPIO_MAX];
-short A4988_ms1_pin = pin[GPIO_MAX];
-short A4988_ms2_pin = pin[GPIO_MAX];
-short A4988_ms3_pin = pin[GPIO_MAX];
-short A4988_ena_pin = pin[GPIO_MAX];
+short A4988_dir_pin = 0;
+short A4988_stp_pin = 0;
+short A4988_ms1_pin = 0;
+short A4988_ms2_pin = 0;
+short A4988_ms3_pin = 0;
+short A4988_ena_pin = 0;
 int   A4988_spr    = 0;
 float A4988_rpm    = 0;
 short A4988_mis    = 0;
@@ -41,12 +41,12 @@ A4988_Stepper* myA4988 = nullptr;
 
 void A4988Init(void)
 {
-  A4988_dir_pin = pin[GPIO_A4988_DIR];
-  A4988_stp_pin = pin[GPIO_A4988_STP];
-  A4988_ena_pin = pin[GPIO_A4988_ENA];
-  A4988_ms1_pin = pin[GPIO_A4988_MS1];
-  A4988_ms2_pin = pin[GPIO_A4988_MS2];
-  A4988_ms3_pin = pin[GPIO_A4988_MS3];
+  A4988_dir_pin = Pin(GPIO_A4988_DIR);
+  A4988_stp_pin = Pin(GPIO_A4988_STP);
+  A4988_ena_pin = Pin(GPIO_A4988_ENA);
+  A4988_ms1_pin = Pin(GPIO_A4988_MS1);
+  A4988_ms2_pin = Pin(GPIO_A4988_MS1, 1);
+  A4988_ms3_pin = Pin(GPIO_A4988_MS1, 2);
   A4988_spr     = 200;
   A4988_rpm     = 30;
   A4988_mis     = 1;
@@ -93,7 +93,7 @@ void CmndDoTurn(void) {
 }
 
 void CmndSetMIS(void) {
-  if ((pin[GPIO_A4988_MS1] < 99) && (pin[GPIO_A4988_MS2] < 99) && (pin[GPIO_A4988_MS3] < 99) && (XdrvMailbox.data_len > 0)) {
+  if (PinUsed(GPIO_A4988_MS1) && PinUsed(GPIO_A4988_MS1, 1) && PinUsed(GPIO_A4988_MS1, 2) && (XdrvMailbox.data_len > 0)) {
     short newMIS = strtoul(XdrvMailbox.data,nullptr,10);
     myA4988->setMIS(newMIS);
     ResponseCmndDone();
@@ -122,7 +122,7 @@ void CmndSetRPM(void) {
 bool Xdrv25(uint8_t function)
 {
   bool result = false;
-  if ((pin[GPIO_A4988_DIR] < 99) && (pin[GPIO_A4988_STP] < 99)) {
+  if (PinUsed(GPIO_A4988_DIR) && PinUsed(GPIO_A4988_STP)) {
     switch (function) {
       case FUNC_INIT:
         A4988Init();

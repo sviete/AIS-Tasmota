@@ -1,7 +1,7 @@
 /*
   support_rtc.ino - Real Time Clock support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -29,27 +29,24 @@ const uint32_t MINS_PER_HOUR = 60UL;
 
 #define LEAP_YEAR(Y)  (((1970+Y)>0) && !((1970+Y)%4) && (((1970+Y)%100) || !((1970+Y)%400)))
 
-extern "C" {
-#include "sntp.h"
-}
 #include <Ticker.h>
 
 Ticker TickerRtc;
 
-static const uint8_t kDaysInMonth[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }; // API starts months from 1, this array starts from 0
-static const char kMonthNamesEnglish[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+static const uint8_t kDaysInMonth[] PROGMEM = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }; // API starts months from 1, this array starts from 0
+static const char kMonthNamesEnglish[] PROGMEM = "JanFebMarAprMayJunJulAugSepOctNovDec";
 
 struct RTC {
   uint32_t utc_time = 0;
   uint32_t local_time = 0;
   uint32_t daylight_saving_time = 0;
   uint32_t standard_time = 0;
-  uint32_t ntp_time = 0;
   uint32_t midnight = 0;
   uint32_t restart_time = 0;
-  int32_t drift_time = 0;
+  uint32_t millis = 0;
+//  uint32_t last_sync = 0;
   int32_t time_timezone = 0;
-  uint8_t ntp_sync_minute = 0;
+  bool time_synced = false;
   bool midnight_now = false;
   bool user_time_entry = false;               // Override NTP by user setting
 } Rtc;
@@ -62,11 +59,6 @@ uint32_t UtcTime(void)
 uint32_t LocalTime(void)
 {
   return Rtc.local_time;
-}
-
-int32_t DriftTime(void)
-{
-  return Rtc.drift_time;
 }
 
 uint32_t Midnight(void)
@@ -96,7 +88,9 @@ String GetBuildDateAndTime(void)
   // "2017-03-07T11:08:02" - ISO8601:2004
   char bdt[21];
   char *p;
-  char mdate[] = __DATE__;  // "Mar  7 2017"
+  static const char mdate_P[] PROGMEM = __DATE__;  // "Mar  7 2017"
+  char mdate[strlen_P(mdate_P)+1];      // copy on stack first
+  strcpy_P(mdate, mdate_P);
   char *smonth = mdate;
   int day = 0;
   int year = 0;
@@ -115,8 +109,10 @@ String GetBuildDateAndTime(void)
       year = atoi(str);
     }
   }
-  int month = (strstr(kMonthNamesEnglish, smonth) -kMonthNamesEnglish) /3 +1;
-  snprintf_P(bdt, sizeof(bdt), PSTR("%d" D_YEAR_MONTH_SEPARATOR "%02d" D_MONTH_DAY_SEPARATOR "%02d" D_DATE_TIME_SEPARATOR "%s"), year, month, day, __TIME__);
+  char MonthNamesEnglish[sizeof(kMonthNamesEnglish)];
+  strcpy_P(MonthNamesEnglish, kMonthNamesEnglish);
+  int month = (strstr(MonthNamesEnglish, smonth) -MonthNamesEnglish) /3 +1;
+  snprintf_P(bdt, sizeof(bdt), PSTR("%d" D_YEAR_MONTH_SEPARATOR "%02d" D_MONTH_DAY_SEPARATOR "%02d" D_DATE_TIME_SEPARATOR "%s"), year, month, day, PSTR(__TIME__));
   return String(bdt);  // 2017-03-07T11:08:02
 }
 
@@ -170,8 +166,8 @@ String GetDT(uint32_t time)
 /*
  * timestamps in https://en.wikipedia.org/wiki/ISO_8601 format
  *
- *  DT_UTC - current data and time in Greenwich, England (aka GMT)
- *  DT_LOCAL - current date and time taking timezone into account
+ *  DT_UTC     - current data and time in Greenwich, England (aka GMT)
+ *  DT_LOCAL   - current date and time taking timezone into account
  *  DT_RESTART - the date and time this device last started, in local timezone
  *
  * Format:
@@ -184,11 +180,17 @@ String GetDateAndTime(uint8_t time_type)
   uint32_t time = Rtc.local_time;
 
   switch (time_type) {
-    case DT_ENERGY:
-      time = Settings.energy_kWhtotal_time;
-      break;
     case DT_UTC:
       time = Rtc.utc_time;
+      break;
+//    case DT_LOCALNOTZ:  // Is default anyway but allows for not appendig timezone
+//      time = Rtc.local_time;
+//      break;
+    case DT_DST:
+      time = Rtc.daylight_saving_time;
+      break;
+    case DT_STD:
+      time = Rtc.standard_time;
       break;
     case DT_RESTART:
       if (Rtc.restart_time == 0) {
@@ -196,29 +198,26 @@ String GetDateAndTime(uint8_t time_type)
       }
       time = Rtc.restart_time;
       break;
+    case DT_ENERGY:
+      time = Settings.energy_kWhtotal_time;
+      break;
+    case DT_BOOTCOUNT:
+      time = Settings.bootcount_reset_time;
+      break;
   }
   String dt = GetDT(time);  // 2017-03-07T11:08:02
-  if (Settings.flag3.time_append_timezone && (DT_LOCAL == time_type)) {
+
+  if (DT_LOCAL_MILLIS == time_type) {
+    char ms[10];
+    snprintf_P(ms, sizeof(ms), PSTR(".%03d"), RtcMillis());
+    dt += ms;
+    time_type = DT_LOCAL;
+  }
+
+  if (Settings.flag3.time_append_timezone && (DT_LOCAL == time_type)) {  // SetOption52 - Append timezone to JSON time
     dt += GetTimeZone();    // 2017-03-07T11:08:02-07:00
   }
   return dt;  // 2017-03-07T11:08:02-07:00
-}
-
-String GetTime(int type)
-{
-  /* type 1 - Local time
-   * type 2 - Daylight Savings time
-   * type 3 - Standard time
-   */
-  char stime[25];   // Skip newline
-
-  uint32_t time = Rtc.utc_time;
-  if (1 == type) time = Rtc.local_time;
-  if (2 == type) time = Rtc.daylight_saving_time;
-  if (3 == type) time = Rtc.standard_time;
-  snprintf_P(stime, sizeof(stime), sntp_get_real_time(time));
-
-  return String(stime);  // Thu Nov 01 11:41:02 2018
 }
 
 uint32_t UpTime(void)
@@ -226,7 +225,7 @@ uint32_t UpTime(void)
   if (Rtc.restart_time) {
     return Rtc.utc_time - Rtc.restart_time;
   } else {
-    return uptime;
+    return TasmotaGlobal.uptime;
   }
 }
 
@@ -248,6 +247,10 @@ uint32_t MinutesPastMidnight(void)
     minutes = (RtcTime.hour *60) + RtcTime.minute;
   }
   return minutes;
+}
+
+uint32_t RtcMillis(void) {
+  return (millis() - Rtc.millis) % 1000;
 }
 
 void BreakTime(uint32_t time_input, TIME_T &tm)
@@ -283,9 +286,6 @@ void BreakTime(uint32_t time_input, TIME_T &tm)
   time -= days;              // now it is days in this year, starting at 0
   tm.day_of_year = time;
 
-  days = 0;
-  month = 0;
-  month_length = 0;
   for (month = 0; month < 12; month++) {
     if (1 == month) { // february
       if (LEAP_YEAR(year)) {
@@ -294,7 +294,7 @@ void BreakTime(uint32_t time_input, TIME_T &tm)
         month_length = 28;
       }
     } else {
-      month_length = kDaysInMonth[month];
+      month_length = pgm_read_byte(&kDaysInMonth[month]);
     }
 
     if (time >= month_length) {
@@ -330,7 +330,7 @@ uint32_t MakeTime(TIME_T &tm)
     if ((2 == i) && LEAP_YEAR(tm.year)) {
       seconds += SECS_PER_DAY * 29;
     } else {
-      seconds += SECS_PER_DAY * kDaysInMonth[i-1];  // monthDay array starts from 0
+      seconds += SECS_PER_DAY * pgm_read_byte(&kDaysInMonth[i-1]);  // monthDay array starts from 0
     }
   }
   seconds+= (tm.day_of_month - 1) * SECS_PER_DAY;
@@ -374,41 +374,45 @@ uint32_t RuleToTime(TimeRule r, int yr)
 
 void RtcSecond(void)
 {
-  TIME_T tmpTime;
+  static uint32_t last_sync = 0;
+  static bool mutex = false;
 
-  if (!Rtc.user_time_entry) {
-    if ((Rtc.ntp_sync_minute > 59) && (RtcTime.minute > 2)) Rtc.ntp_sync_minute = 1;                 // If sync prepare for a new cycle
-    uint8_t offset = (uptime < 30) ? RtcTime.second : (((ESP.getChipId() & 0xF) * 3) + 3) ;  // First try ASAP to sync. If fails try once every 60 seconds based on chip id
-    if (!global_state.wifi_down && (((offset == RtcTime.second) && ((RtcTime.year < 2016) || (Rtc.ntp_sync_minute == RtcTime.minute))) || ntp_force_sync)) {
-      Rtc.ntp_time = sntp_get_current_timestamp();
-      if (Rtc.ntp_time > START_VALID_TIME) {  // Fix NTP bug in core 2.4.1/SDK 2.2.1 (returns Thu Jan 01 08:00:10 1970 after power on)
-        ntp_force_sync = false;
-        if (Rtc.utc_time > START_VALID_TIME) { Rtc.drift_time = Rtc.ntp_time - Rtc.utc_time; }
-        Rtc.utc_time = Rtc.ntp_time;
-        Rtc.ntp_sync_minute = 60;  // Sync so block further requests
-        if (Rtc.restart_time == 0) {
-          Rtc.restart_time = Rtc.utc_time - uptime;  // save first ntp time as restart time
-        }
-        BreakTime(Rtc.utc_time, tmpTime);
-        RtcTime.year = tmpTime.year + 1970;
-        Rtc.daylight_saving_time = RuleToTime(Settings.tflag[1], RtcTime.year);
-        Rtc.standard_time = RuleToTime(Settings.tflag[0], RtcTime.year);
+  if (mutex) { return; }
 
-        // Do not use AddLog here if syslog is enabled. UDP will force exception 9
-  //      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "(" D_UTC_TIME ") %s, (" D_DST_TIME ") %s, (" D_STD_TIME ") %s"), GetTime(0).c_str(), GetTime(2).c_str(), GetTime(3).c_str());
-        ntp_synced_message = true;
+  if (Rtc.time_synced) {
+    mutex = true;
 
-        if (Rtc.local_time < START_VALID_TIME) {  // 2016-01-01
-          rules_flag.time_init = 1;
-        } else {
-          rules_flag.time_set = 1;
-        }
-      } else {
-        Rtc.ntp_sync_minute++;  // Try again in next minute
-      }
+    Rtc.time_synced = false;
+    last_sync = Rtc.utc_time;
+
+    if (Rtc.restart_time == 0) {
+      Rtc.restart_time = Rtc.utc_time - TasmotaGlobal.uptime;  // save first synced time as restart time
     }
+
+    TIME_T tmpTime;
+    BreakTime(Rtc.utc_time, tmpTime);
+    RtcTime.year = tmpTime.year + 1970;
+    Rtc.daylight_saving_time = RuleToTime(Settings.tflag[1], RtcTime.year);
+    Rtc.standard_time = RuleToTime(Settings.tflag[0], RtcTime.year);
+
+    AddLog(LOG_LEVEL_DEBUG, PSTR("RTC: " D_UTC_TIME " %s, " D_DST_TIME " %s, " D_STD_TIME " %s"),
+      GetDateAndTime(DT_UTC).c_str(), GetDateAndTime(DT_DST).c_str(), GetDateAndTime(DT_STD).c_str());
+
+    if (Rtc.local_time < START_VALID_TIME) {  // 2016-01-01
+      TasmotaGlobal.rules_flag.time_init = 1;
+    } else {
+      TasmotaGlobal.rules_flag.time_set = 1;
+    }
+  } else {
+    Rtc.utc_time++;  // Increment every second
   }
-  Rtc.utc_time++;
+  Rtc.millis = millis();
+
+  if ((Rtc.utc_time > (2 * 60 * 60)) && (last_sync < Rtc.utc_time - (2 * 60 * 60))) {  // Every two hours a warning
+    AddLog(LOG_LEVEL_DEBUG, PSTR("RTC: Not synced"));
+    last_sync = Rtc.utc_time;
+  }
+
   Rtc.local_time = Rtc.utc_time;
   if (Rtc.local_time > START_VALID_TIME) {  // 2016-01-01
     int16_t timezone_minutes = Settings.timezone_minutes;
@@ -435,10 +439,15 @@ void RtcSecond(void)
     }
     Rtc.local_time += Rtc.time_timezone;
     Rtc.time_timezone /= 60;
-    if (!Settings.energy_kWhtotal_time) { Settings.energy_kWhtotal_time = Rtc.local_time; }
+    if (!Settings.energy_kWhtotal_time) {
+      Settings.energy_kWhtotal_time = Rtc.local_time;
+    }
+    if (Settings.bootcount_reset_time < START_VALID_TIME) {
+      Settings.bootcount_reset_time = Rtc.local_time;
+    }
   }
-  BreakTime(Rtc.local_time, RtcTime);
 
+  BreakTime(Rtc.local_time, RtcTime);
   if (RtcTime.valid) {
     if (!Rtc.midnight) {
       Rtc.midnight = Rtc.local_time - (RtcTime.hour * 3600) - (RtcTime.minute * 60) - RtcTime.second;
@@ -447,32 +456,43 @@ void RtcSecond(void)
       Rtc.midnight = Rtc.local_time;
       Rtc.midnight_now = true;
     }
+
+    if (mutex) {  // Time is just synced and is valid
+      // Sync Core/RTOS time to be used by file system time stamps
+      struct timeval tv;
+      tv.tv_sec = Rtc.local_time;
+      tv.tv_usec = 0;
+      settimeofday(&tv, nullptr);
+    }
   }
 
   RtcTime.year += 1970;
+
+  mutex = false;
 }
 
-void RtcSetTime(uint32_t epoch)
-{
+void RtcSync(void) {
+  Rtc.time_synced = true;
+  RtcSecond();
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("RTC: Synced"));
+}
+
+void RtcSetTime(uint32_t epoch) {
   if (epoch < START_VALID_TIME) {  // 2016-01-01
     Rtc.user_time_entry = false;
-    ntp_force_sync = true;
+    TasmotaGlobal.ntp_force_sync = true;
   } else {
     Rtc.user_time_entry = true;
     Rtc.utc_time = epoch -1;    // Will be corrected by RtcSecond
   }
-  RtcSecond();
 }
 
-void RtcInit(void)
-{
-  sntp_setservername(0, Settings.ntp_server[0]);
-  sntp_setservername(1, Settings.ntp_server[1]);
-  sntp_setservername(2, Settings.ntp_server[2]);
-  sntp_stop();
-  sntp_set_timezone(0);      // UTC time
-  sntp_init();
+void RtcInit(void) {
   Rtc.utc_time = 0;
   BreakTime(Rtc.utc_time, RtcTime);
   TickerRtc.attach(1, RtcSecond);
+}
+
+void RtcPreInit(void) {
+  Rtc.millis = millis();
 }

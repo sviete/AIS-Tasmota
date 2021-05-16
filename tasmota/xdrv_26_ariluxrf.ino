@@ -1,7 +1,7 @@
 /*
   xdrv_26_ariluxrf.ino - Arilux Rf support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ const uint32_t ARILUX_RF_SEPARATION_LIMIT = 4300;      // Microseconds
 const uint32_t ARILUX_RF_RECEIVE_TOLERANCE = 60;       // Percentage
 
 struct ARILUX {
-  unsigned int rf_timings[ARILUX_RF_MAX_CHANGES];
+  int rf_timings[ARILUX_RF_MAX_CHANGES];
 
   unsigned long rf_received_value = 0;
   unsigned long rf_last_received_value = 0;
@@ -45,24 +45,22 @@ struct ARILUX {
   uint8_t rf_toggle = 0;
 } Arilux;
 
-#ifndef ARDUINO_ESP8266_RELEASE_2_3_0          // Fix core 2.5.x ISR not in IRAM Exception
 #ifndef USE_WS2812_DMA                         // Collides with Neopixelbus but solves RF misses
-void AriluxRfInterrupt(void) ICACHE_RAM_ATTR;  // As iram is tight and it works this way too
+void AriluxRfInterrupt(void) IRAM_ATTR;  // As iram is tight and it works this way too
 #endif  // USE_WS2812_DMA
-#endif  // ARDUINO_ESP8266_RELEASE_2_3_0
 
 void AriluxRfInterrupt(void)
 {
   unsigned long time = micros();
-  unsigned int duration = time - Arilux.rf_lasttime;
+  int duration = time - Arilux.rf_lasttime;
 
   if (duration > ARILUX_RF_SEPARATION_LIMIT) {
     if (abs(duration - Arilux.rf_timings[0]) < 200) {
       Arilux.rf_repeat_count++;
       if (Arilux.rf_repeat_count == 2) {
         unsigned long code = 0;
-        const unsigned int delay = Arilux.rf_timings[0] / 31;
-        const unsigned int delayTolerance = delay * ARILUX_RF_RECEIVE_TOLERANCE / 100;
+        const int delay = Arilux.rf_timings[0] / 31;
+        const int delayTolerance = delay * ARILUX_RF_RECEIVE_TOLERANCE / 100;
         for (unsigned int i = 1; i < Arilux.rf_change_count -1; i += 2) {
           code <<= 1;
           if (abs(Arilux.rf_timings[i] - (delay *3)) < delayTolerance && abs(Arilux.rf_timings[i +1] - delay) < delayTolerance) {
@@ -99,7 +97,8 @@ void AriluxRfHandler(void)
     }
     uint16_t stored_hostcode = Settings.rf_code[1][6] << 8 | Settings.rf_code[1][7];
 
-    DEBUG_DRIVER_LOG(PSTR(D_LOG_RFR D_HOST D_CODE " 0x%04X, " D_RECEIVED " 0x%06X"), stored_hostcode, Arilux.rf_received_value);
+//    DEBUG_DRIVER_LOG(PSTR(D_LOG_RFR D_HOST D_CODE " 0x%04X, " D_RECEIVED " 0x%06X"), stored_hostcode, Arilux.rf_received_value);
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_RFR D_HOST D_CODE " 0x%04X, " D_RECEIVED " 0x%06X"), stored_hostcode, Arilux.rf_received_value);
 
     if (hostcode == stored_hostcode) {
       char command[33];
@@ -147,24 +146,23 @@ void AriluxRfHandler(void)
 
 void AriluxRfInit(void)
 {
-  if ((pin[GPIO_ARIRFRCV] < 99) && (pin[GPIO_ARIRFSEL] < 99)) {
-    if (Settings.last_module != Settings.module) {
+  if (PinUsed(GPIO_ARIRFRCV) && PinUsed(GPIO_ARIRFSEL)) {
+    if (TasmotaGlobal.module_changed) {
       Settings.rf_code[1][6] = 0;
       Settings.rf_code[1][7] = 0;
-      Settings.last_module = Settings.module;
     }
     Arilux.rf_received_value = 0;
 
-    digitalWrite(pin[GPIO_ARIRFSEL], 0);  // Turn on RF
-    attachInterrupt(pin[GPIO_ARIRFRCV], AriluxRfInterrupt, CHANGE);
+    digitalWrite(Pin(GPIO_ARIRFSEL), 0);  // Turn on RF
+    attachInterrupt(Pin(GPIO_ARIRFRCV), AriluxRfInterrupt, CHANGE);
   }
 }
 
 void AriluxRfDisable(void)
 {
-  if ((pin[GPIO_ARIRFRCV] < 99) && (pin[GPIO_ARIRFSEL] < 99)) {
-    detachInterrupt(pin[GPIO_ARIRFRCV]);
-    digitalWrite(pin[GPIO_ARIRFSEL], 1);  // Turn off RF
+  if (PinUsed(GPIO_ARIRFRCV) && PinUsed(GPIO_ARIRFSEL)) {
+    detachInterrupt(Pin(GPIO_ARIRFRCV));
+    digitalWrite(Pin(GPIO_ARIRFSEL), 1);  // Turn off RF
   }
 }
 
@@ -178,10 +176,10 @@ bool Xdrv26(uint8_t function)
 
   switch (function) {
     case FUNC_EVERY_50_MSECOND:
-      if (pin[GPIO_ARIRFRCV] < 99) { AriluxRfHandler(); }
+      if (PinUsed(GPIO_ARIRFRCV)) { AriluxRfHandler(); }
       break;
     case FUNC_EVERY_SECOND:
-      if (10 == uptime) { AriluxRfInit(); }  // Needs rest before enabling RF interrupts
+      if (10 == TasmotaGlobal.uptime) { AriluxRfInit(); }  // Needs rest before enabling RF interrupts
       break;
   }
   return result;

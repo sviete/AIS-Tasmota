@@ -1,7 +1,7 @@
 /*
   xdsp_05_epaper.ino - Display e-paper support for Tasmota
 
-  Copyright (C) 2019  Theo Arends, Gerhard Mutz and Waveshare
+  Copyright (C) 2021  Theo Arends, Gerhard Mutz and Waveshare
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -37,20 +37,19 @@
 #include <epdpaint.h>
 
 //unsigned char image[(EPD_HEIGHT * EPD_WIDTH) / 8];
-extern uint8_t *buffer;
 uint16_t epd_scroll;
+bool epd_init_done = false;
 
 Epd *epd;
 
 /*********************************************************************************************/
 
-void EpdInitDriver29()
-{
-  if (!Settings.display_model) {
-    Settings.display_model = XDSP_05;
-  }
+void EpdInitDriver29(void) {
+  if (PinUsed(GPIO_EPAPER29_CS) &&
+     ((TasmotaGlobal.soft_spi_enabled & SPI_MOSI) || (TasmotaGlobal.spi_enabled & SPI_MOSI))) {
 
-  if (XDSP_05 == Settings.display_model) {
+    Settings.display_model = XDSP_05;
+
     if (Settings.display_width != EPD_WIDTH) {
       Settings.display_width = EPD_WIDTH;
     }
@@ -58,28 +57,19 @@ void EpdInitDriver29()
       Settings.display_height = EPD_HEIGHT;
     }
 
-    // allocate screen buffer
-    if (buffer) free(buffer);
-    buffer=(unsigned char*)calloc((EPD_WIDTH * EPD_HEIGHT) / 8,1);
-    if (!buffer) return;
-
     // init renderer
-    epd  = new Epd(EPD_WIDTH,EPD_HEIGHT);
+    epd  = new Epd(EPD_WIDTH, EPD_HEIGHT);
 
     // whiten display with full update, takes 3 seconds
-    if ((pin[GPIO_SPI_CS] < 99) && (pin[GPIO_SPI_CLK] < 99) && (pin[GPIO_SPI_MOSI] < 99)) {
-      epd->Begin(pin[GPIO_SPI_CS],pin[GPIO_SPI_MOSI],pin[GPIO_SPI_CLK]);
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("EPD: HardSPI CS %d, CLK %d, MOSI %d"),pin[GPIO_SPI_CS], pin[GPIO_SPI_CLK], pin[GPIO_SPI_MOSI]);
+    if (TasmotaGlobal.soft_spi_enabled) {
+      epd->Begin(Pin(GPIO_EPAPER29_CS), Pin(GPIO_SSPI_MOSI), Pin(GPIO_SSPI_SCLK));
     }
-    else if ((pin[GPIO_SSPI_CS] < 99) && (pin[GPIO_SSPI_SCLK] < 99) && (pin[GPIO_SSPI_MOSI] < 99)) {
-      epd->Begin(pin[GPIO_SSPI_CS],pin[GPIO_SSPI_MOSI],pin[GPIO_SSPI_SCLK]);
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("EPD: SoftSPI CS %d, CLK %d, MOSI %d"),pin[GPIO_SSPI_CS], pin[GPIO_SSPI_SCLK], pin[GPIO_SSPI_MOSI]);
-    } else {
-      free(buffer);
-      return;
+    else if (TasmotaGlobal.spi_enabled) {
+      epd->Begin(Pin(GPIO_EPAPER29_CS), Pin(GPIO_SPI_MOSI), Pin(GPIO_SPI_CLK));
     }
 
     renderer = epd;
+
     epd->Init(DISPLAY_INIT_FULL);
     epd->Init(DISPLAY_INIT_PARTIAL);
     renderer->DisplayInit(DISPLAY_INIT_MODE,Settings.display_size,Settings.display_rotate,Settings.display_font);
@@ -88,6 +78,7 @@ void EpdInitDriver29()
 
 #ifdef SHOW_SPLASH
     // Welcome text
+    delay(100);
     renderer->setTextFont(1);
     renderer->DrawStringAt(50, 50, "Waveshare E-Paper Display!", COLORED,0);
     renderer->Updateframe();
@@ -95,6 +86,8 @@ void EpdInitDriver29()
     renderer->fillScreen(0);
 #endif
 
+    epd_init_done = true;
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: E-Paper 2.9"));
   }
 }
 
@@ -136,7 +129,7 @@ void EpdPrintLog29(void)
       renderer->DrawStringAt(0, epd_scroll, disp_screen_buffer[last_row], COLORED, 0);
 //      EpdDisplayFrame();
 
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "[%s]"), txt);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "[%s]"), txt);
     }
   }
 }
@@ -186,21 +179,22 @@ void EpdRefresh29(void)  // Every second
 bool Xdsp05(uint8_t function)
 {
   bool result = false;
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      EpdInitDriver29();
-    }
-    else if (XDSP_05 == Settings.display_model) {
-      switch (function) {
-        case FUNC_DISPLAY_MODEL:
-          result = true;
-          break;
+
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    EpdInitDriver29();
+  }
+  else if (epd_init_done && (XDSP_05 == Settings.display_model)) {
+    switch (function) {
+      case FUNC_DISPLAY_MODEL:
+        result = true;
+        break;
 #ifdef USE_DISPLAY_MODES1TO5
-        case FUNC_DISPLAY_EVERY_SECOND:
-          EpdRefresh29();
-          break;
+      case FUNC_DISPLAY_EVERY_SECOND:
+        EpdRefresh29();
+        break;
 #endif  // USE_DISPLAY_MODES1TO5
-      }
     }
+  }
   return result;
 }
 

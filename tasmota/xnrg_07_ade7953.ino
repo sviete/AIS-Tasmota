@@ -1,7 +1,7 @@
 /*
   xnrg_07_ade7953.ino - ADE7953 energy sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@
 \*********************************************************************************************/
 
 #define XNRG_07                 7
+#define XI2C_07                 7  // See I2CDEVICES.md
 
 #define ADE7953_PREF            1540
 #define ADE7953_UREF            26000
@@ -36,20 +37,22 @@
 
 #define ADE7953_ADDR            0x38
 
-const uint8_t Ade7953Registers[] {
-  0x1B,  // RMS current channel B (Relay 1)
-  0x13,  // Active power channel B
-  0x11,  // Apparent power channel B
-  0x15,  // Reactive power channel B
-  0x1A,  // RMS current channel A (Relay 2)
-  0x12,  // Active power channel A
-  0x10,  // Apparent power channel A
-  0x14,  // Reactive power channel A
-  0x1C   // RMS voltage (Both relays)
+const uint16_t Ade7953Registers[] {
+  0x31B,  // RMS current channel B (Relay 1)
+  0x313,  // Active power channel B
+  0x311,  // Apparent power channel B
+  0x315,  // Reactive power channel B
+  0x31A,  // RMS current channel A (Relay 2)
+  0x312,  // Active power channel A
+  0x310,  // Apparent power channel A
+  0x314,  // Reactive power channel A
+  0x31C,  // RMS voltage (Both relays)
+  0x10E   // 16-bit unsigned period register
 };
 
 struct Ade7953 {
   uint32_t voltage_rms = 0;
+  uint32_t period = 0;
   uint32_t current_rms[2] = { 0, 0 };
   uint32_t active_power[2] = { 0, 0 };
   uint8_t init_step = 0;
@@ -118,17 +121,20 @@ void Ade7953Init(void)
 void Ade7953GetData(void)
 {
   int32_t reg[2][4];
-  for (uint32_t i = 0; i < sizeof(Ade7953Registers); i++) {
-    int32_t value = Ade7953Read(0x300 + Ade7953Registers[i]);
+  for (uint32_t i = 0; i < sizeof(Ade7953Registers)/sizeof(uint16_t); i++) {
+    int32_t value = Ade7953Read(Ade7953Registers[i]);
     if (8 == i) {
       Ade7953.voltage_rms = value;  // RMS voltage (Both relays)
+    } else if (9 == i) {
+      Ade7953.period = value;  // period
     } else {
       reg[i >> 2][i &3] = value;
     }
   }
-  AddLog_P2(LOG_LEVEL_DEBUG_MORE, PSTR("ADE: %d, [%d, %d, %d, %d], [%d, %d, %d, %d]"),
-    Ade7953.voltage_rms, reg[0][0], reg[0][1], reg[0][2], reg[0][3],
-                         reg[1][0], reg[1][1], reg[1][2], reg[1][3]);
+  AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("ADE: %d, %d, [%d, %d, %d, %d], [%d, %d, %d, %d]"),
+    Ade7953.voltage_rms, Ade7953.period,
+    reg[0][0], reg[0][1], reg[0][2], reg[0][3],
+    reg[1][0], reg[1][1], reg[1][2], reg[1][3]);
 
   uint32_t apparent_power[2] = { 0, 0 };
   uint32_t reactive_power[2] = { 0, 0 };
@@ -148,11 +154,14 @@ void Ade7953GetData(void)
   uint32_t current_rms_sum = Ade7953.current_rms[0] + Ade7953.current_rms[1];
   uint32_t active_power_sum = Ade7953.active_power[0] + Ade7953.active_power[1];
 
-  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("ADE: U %d, I %d + %d = %d, P %d + %d = %d"),
-    Ade7953.voltage_rms, Ade7953.current_rms[0], Ade7953.current_rms[1], current_rms_sum, Ade7953.active_power[0], Ade7953.active_power[1], active_power_sum);
+  AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("ADE: U %d, C %d, I %d + %d = %d, P %d + %d = %d"),
+    Ade7953.voltage_rms, Ade7953.period,
+    Ade7953.current_rms[0], Ade7953.current_rms[1], current_rms_sum,
+    Ade7953.active_power[0], Ade7953.active_power[1], active_power_sum);
 
   if (Energy.power_on) {  // Powered on
     Energy.voltage[0] = (float)Ade7953.voltage_rms / Settings.energy_voltage_calibration;
+    Energy.frequency[0] = 223750.0f / ( (float)Ade7953.period + 1);
 
     for (uint32_t channel = 0; channel < 2; channel++) {
       Energy.data_valid[channel] = 0;
@@ -165,9 +174,11 @@ void Ade7953GetData(void)
         Energy.current[channel] = (float)Ade7953.current_rms[channel] / (Settings.energy_current_calibration * 10);
       }
     }
+/*
   } else {  // Powered off
     Energy.data_valid[0] = ENERGY_WATCHDOG;
     Energy.data_valid[1] = ENERGY_WATCHDOG;
+*/
   }
 
   if (active_power_sum) {
@@ -176,7 +187,7 @@ void Ade7953GetData(void)
   }
 }
 
-void Ade7953EnergyEverySecond()
+void Ade7953EnergyEverySecond(void)
 {
 	if (Ade7953.init_step) {
     if (1 == Ade7953.init_step) {
@@ -190,21 +201,22 @@ void Ade7953EnergyEverySecond()
 
 void Ade7953DrvInit(void)
 {
-  if (i2c_flg && (pin[GPIO_ADE7953_IRQ] < 99)) {  // Irq on GPIO16 is not supported...
+  if (PinUsed(GPIO_ADE7953_IRQ)) {                // Irq on GPIO16 is not supported...
+    pinMode(Pin(GPIO_ADE7953_IRQ), INPUT);        // Related to resetPins() - Must be set to input
     delay(100);                                   // Need 100mS to init ADE7953
-    if (I2cDevice(ADE7953_ADDR)) {
+    if (I2cSetDevice(ADE7953_ADDR)) {
       if (HLW_PREF_PULSE == Settings.energy_power_calibration) {
         Settings.energy_power_calibration = ADE7953_PREF;
         Settings.energy_voltage_calibration = ADE7953_UREF;
         Settings.energy_current_calibration = ADE7953_IREF;
       }
-      AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, "ADE7953", ADE7953_ADDR);
+      I2cSetActiveFound(ADE7953_ADDR, "ADE7953");
       Ade7953.init_step = 2;
-
       Energy.phase_count = 2;                     // Handle two channels as two phases
       Energy.voltage_common = true;               // Use common voltage
-
-      energy_flg = XNRG_07;
+      Energy.frequency_common = true;             // Use common frequency
+      Energy.use_overtemp = true;                 // Use global temperature for overtemp detection
+      TasmotaGlobal.energy_driver = XNRG_07;
     }
   }
 }
@@ -260,6 +272,8 @@ bool Ade7953Command(void)
 
 bool Xnrg07(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_07)) { return false; }
+
   bool result = false;
 
   switch (function) {

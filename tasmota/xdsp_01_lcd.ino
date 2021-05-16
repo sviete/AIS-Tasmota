@@ -1,7 +1,7 @@
 /*
   xdsp_01_lcd.ino - Display LCD support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Adafruit
+  Copyright (C) 2021  Theo Arends and Adafruit
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
 #ifdef USE_DISPLAY_LCD
 
 #define XDSP_01                1
+#define XI2C_03                3            // See I2CDEVICES.md
 
 #define LCD_ADDRESS1           0x27         // LCD I2C address option 1
 #define LCD_ADDRESS2           0x3F         // LCD I2C address option 2
@@ -54,20 +55,23 @@ void LcdInit(uint8_t mode)
   }
 }
 
-void LcdInitDriver(void)
-{
+void LcdInitDriver(void) {
+  if (!TasmotaGlobal.i2c_enabled) { return; }
+
   if (!Settings.display_model) {
-    if (I2cDevice(LCD_ADDRESS1)) {
+    if (I2cSetDevice(LCD_ADDRESS1)) {
       Settings.display_address[0] = LCD_ADDRESS1;
       Settings.display_model = XDSP_01;
     }
-    else if (I2cDevice(LCD_ADDRESS2)) {
+    else if (I2cSetDevice(LCD_ADDRESS2)) {
       Settings.display_address[0] = LCD_ADDRESS2;
       Settings.display_model = XDSP_01;
     }
   }
 
   if (XDSP_01 == Settings.display_model) {
+    I2cSetActiveFound(Settings.display_address[0], "LCD");
+
     Settings.display_width = Settings.display_cols[0];
     Settings.display_height = Settings.display_rows;
     lcd = new LiquidCrystal_I2C(Settings.display_address[0], Settings.display_cols[0], Settings.display_rows);
@@ -77,18 +81,24 @@ void LcdInitDriver(void)
 #endif  // USE_DISPLAY_MODES1TO5
 
     LcdInitMode();
+
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: LCD"));
   }
 }
 
 void LcdDrawStringAt(void)
 {
+  if (dsp_flag) {  // Supply Line and Column starting with Line 1 and Column 1
+    dsp_x--;
+    dsp_y--;
+  }
   lcd->setCursor(dsp_x, dsp_y);
   lcd->print(dsp_str);
 }
 
-void LcdDisplayOnOff(uint8_t on)
+void LcdDisplayOnOff()
 {
-  if (on) {
+  if (disp_power) {
     lcd->backlight();
   } else {
     lcd->noBacklight();
@@ -140,7 +150,7 @@ bool LcdPrintLog(void)
       strlcpy(disp_screen_buffer[last_row], txt, disp_screen_buffer_cols);
       DisplayFillScreen(last_row);
 
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
 
       lcd->setCursor(0, last_row);
       lcd->print(disp_screen_buffer[last_row]);
@@ -189,26 +199,27 @@ void LcdRefresh(void)  // Every second
 
 bool Xdsp01(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_03)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      LcdInitDriver();
-    }
-    else if (XDSP_01 == Settings.display_model) {
-      switch (function) {
-        case FUNC_DISPLAY_MODEL:
-          result = true;
-          break;
-        case FUNC_DISPLAY_INIT:
-          LcdInit(dsp_init);
-          break;
-        case FUNC_DISPLAY_POWER:
-          LcdDisplayOnOff(disp_power);
-          break;
-        case FUNC_DISPLAY_CLEAR:
-          lcd->clear();
-          break;
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    LcdInitDriver();
+  }
+  else if (XDSP_01 == Settings.display_model) {
+    switch (function) {
+      case FUNC_DISPLAY_MODEL:
+        result = true;
+        break;
+      case FUNC_DISPLAY_INIT:
+        LcdInit(dsp_init);
+        break;
+      case FUNC_DISPLAY_POWER:
+        LcdDisplayOnOff();
+        break;
+      case FUNC_DISPLAY_CLEAR:
+        lcd->clear();
+        break;
 //        case FUNC_DISPLAY_DRAW_HLINE:
 //          break;
 //        case FUNC_DISPLAY_DRAW_VLINE:
@@ -227,20 +238,16 @@ bool Xdsp01(uint8_t function)
 //          break;
 //        case FUNC_DISPLAY_FONT_SIZE:
 //          break;
-        case FUNC_DISPLAY_DRAW_STRING:
-          LcdDrawStringAt();
-          break;
-        case FUNC_DISPLAY_ONOFF:
-          LcdDisplayOnOff(dsp_on);
-          break;
+      case FUNC_DISPLAY_DRAW_STRING:
+        LcdDrawStringAt();
+        break;
 //        case FUNC_DISPLAY_ROTATION:
 //          break;
 #ifdef USE_DISPLAY_MODES1TO5
-        case FUNC_DISPLAY_EVERY_SECOND:
-          LcdRefresh();
-          break;
+      case FUNC_DISPLAY_EVERY_SECOND:
+        LcdRefresh();
+        break;
 #endif  // USE_DISPLAY_MODES1TO5
-      }
     }
   }
   return result;

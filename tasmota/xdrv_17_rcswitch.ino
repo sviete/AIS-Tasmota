@@ -1,7 +1,7 @@
 /*
   xdrv_17_rcswitch.ino - RF transceiver using RcSwitch library for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-
 #ifdef USE_RC_SWITCH
 /*********************************************************************************************\
  * RF send and receive using RCSwitch library https://github.com/sui77/rc-switch/
@@ -29,14 +28,17 @@
 #define D_JSON_RF_DATA "Data"
 
 #define D_CMND_RFSEND "RFSend"
+#define D_CMND_RFPROTOCOL "RfProtocol"
+
 #define D_JSON_RF_PULSE "Pulse"
 #define D_JSON_RF_REPEAT "Repeat"
+#define D_JSON_NONE_ENABLED "None Enabled"
 
-const char kRfSendCommands[] PROGMEM = "|"  // No prefix
-  D_CMND_RFSEND;
+const char kRfCommands[] PROGMEM = "|"  // No prefix
+  D_CMND_RFSEND "|" D_CMND_RFPROTOCOL;
 
-void (* const RfSendCommand[])(void) PROGMEM =
-  { &CmndRfSend };
+void (* const RfCommands[])(void) PROGMEM = {
+  &CmndRfSend, &CmndRfProtocol };
 
 #include <RCSwitch.h>
 
@@ -46,8 +48,7 @@ RCSwitch mySwitch = RCSwitch();
 
 uint32_t rf_lasttime = 0;
 
-void RfReceiveCheck(void)
-{
+void RfReceiveCheck(void) {
   if (mySwitch.available()) {
 
     unsigned long data = mySwitch.getReceivedValue();
@@ -55,22 +56,21 @@ void RfReceiveCheck(void)
     int protocol = mySwitch.getReceivedProtocol();
     int delay = mySwitch.getReceivedDelay();
 
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("RFR: Data 0x%lX (%u), Bits %d, Protocol %d, Delay %d"), data, data, bits, protocol, delay);
+    AddLog(LOG_LEVEL_DEBUG, PSTR("RFR: Data 0x%lX (%u), Bits %d, Protocol %d, Delay %d"), data, data, bits, protocol, delay);
 
     uint32_t now = millis();
     if ((now - rf_lasttime > RF_TIME_AVOID_DUPLICATE) && (data > 0)) {
       rf_lasttime = now;
 
       char stemp[16];
-      if (Settings.flag.rf_receive_decimal) {      // SetOption28 (0 = hexadecimal, 1 = decimal)
+      if (Settings.flag.rf_receive_decimal) {      // SetOption28 - RF receive data format (0 = hexadecimal, 1 = decimal)
         snprintf_P(stemp, sizeof(stemp), PSTR("%u"), (uint32_t)data);
       } else {
         snprintf_P(stemp, sizeof(stemp), PSTR("\"0x%lX\""), (uint32_t)data);
       }
       ResponseTime_P(PSTR(",\"" D_JSON_RFRECEIVED "\":{\"" D_JSON_RF_DATA "\":%s,\"" D_JSON_RF_BITS "\":%d,\"" D_JSON_RF_PROTOCOL "\":%d,\"" D_JSON_RF_PULSE "\":%d}}"),
         stemp, bits, protocol, delay);
-      MqttPublishPrefixTopic_P(RESULT_OR_TELE, PSTR(D_JSON_RFRECEIVED));
-      XdrvRulesProcess();
+      MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_TELE, PSTR(D_JSON_RFRECEIVED));
 #ifdef USE_DOMOTICZ
       DomoticzSensor(DZ_COUNT, data);  // Send data as Domoticz Counter value
 #endif  // USE_DOMOTICZ
@@ -79,13 +79,17 @@ void RfReceiveCheck(void)
   }
 }
 
-void RfInit(void)
-{
-  if (pin[GPIO_RFSEND] < 99) {
-    mySwitch.enableTransmit(pin[GPIO_RFSEND]);
+void RfInit(void) {
+  if (PinUsed(GPIO_RFSEND)) {
+    mySwitch.enableTransmit(Pin(GPIO_RFSEND));
   }
-  if (pin[GPIO_RFRECV] < 99) {
-    mySwitch.enableReceive(pin[GPIO_RFRECV]);
+  if (PinUsed(GPIO_RFRECV)) {
+    pinMode( Pin(GPIO_RFRECV), INPUT);
+    mySwitch.enableReceive(Pin(GPIO_RFRECV));
+    if (!Settings.rf_protocol_mask) {
+      Settings.rf_protocol_mask = (1ULL << mySwitch.getNumProtos()) -1;
+    }
+    mySwitch.setReceiveProtocolMask(Settings.rf_protocol_mask);
   }
 }
 
@@ -93,29 +97,78 @@ void RfInit(void)
  * Commands
 \*********************************************************************************************/
 
+void CmndRfProtocol(void) {
+  if (!PinUsed(GPIO_RFRECV)) { return; }
+
+//  AddLog_P(LOG_LEVEL_INFO, PSTR("RFR:CmndRfRxProtocol:: index:%d usridx:%d data_len:%d data:\"%s\""),XdrvMailbox.index, XdrvMailbox.usridx, XdrvMailbox.data_len,XdrvMailbox.data);
+
+  uint64_t thisdat;
+  if (1 == XdrvMailbox.usridx) {
+    if (XdrvMailbox.payload >= 0) {
+      thisdat = (1ULL << (XdrvMailbox.index -1));
+      if (XdrvMailbox.payload &1) {
+        Settings.rf_protocol_mask |= thisdat;
+      } else {
+        Settings.rf_protocol_mask &= ~thisdat;
+      }
+    }
+    else if (XdrvMailbox.data_len > 0) {
+      return;  // Not a number
+    }
+  } else {
+    if (XdrvMailbox.data_len > 0) {
+      if ('A' == toupper(XdrvMailbox.data[0])) {
+        Settings.rf_protocol_mask = (1ULL << mySwitch.getNumProtos()) -1;
+      } else {
+        thisdat = strtoull(XdrvMailbox.data, nullptr, 0);
+        if ((thisdat > 0) || ('0' == XdrvMailbox.data[0])) {
+          Settings.rf_protocol_mask = thisdat;
+        } else {
+          return;  // Not a number
+        }
+      }
+    }
+  }
+  mySwitch.setReceiveProtocolMask(Settings.rf_protocol_mask);
+//  AddLog(LOG_LEVEL_INFO, PSTR("RFR: CmndRfProtocol:: Start responce"));
+  Response_P(PSTR("{\"" D_CMND_RFPROTOCOL "\":\""));
+  bool gotone = false;
+  thisdat = 1;
+  for (uint32_t i = 0; i < mySwitch.getNumProtos(); i++) {
+    if (Settings.rf_protocol_mask & thisdat) {
+      ResponseAppend_P(PSTR("%s%d"), (gotone) ? "," : "", i+1);
+      gotone = true;
+    }
+    thisdat <<=1;
+  }
+  if (!gotone) { ResponseAppend_P(PSTR(D_JSON_NONE_ENABLED)); }
+  ResponseAppend_P(PSTR("\""));
+  ResponseJsonEnd();
+}
+
 void CmndRfSend(void)
 {
+  if (!PinUsed(GPIO_RFSEND)) { return; }
+
   bool error = false;
 
   if (XdrvMailbox.data_len) {
-    unsigned long data = 0;
+    unsigned long long data = 0;	// unsigned long long  => support payload >32bit
     unsigned int bits = 24;
     int protocol = 1;
     int repeat = 10;
-    int pulse = 350;
+    int pulse = 0; // 0 leave the library use the default value depending on protocol
 
-    char dataBufUc[XdrvMailbox.data_len];
-    UpperCase(dataBufUc, XdrvMailbox.data);
-    StaticJsonBuffer<150> jsonBuf;  // ArduinoJSON entry used to calculate jsonBuf: JSON_OBJECT_SIZE(5) + 40 = 134
-    JsonObject &root = jsonBuf.parseObject(dataBufUc);
-    if (root.success()) {
+    JsonParser parser(XdrvMailbox.data);
+    JsonParserObject root = parser.getRootObject();
+    if (root) {
       // RFsend {"data":0x501014,"bits":24,"protocol":1,"repeat":10,"pulse":350}
       char parm_uc[10];
-      data = strtoul(root[UpperCase_P(parm_uc, PSTR(D_JSON_RF_DATA))], nullptr, 0);  // Allow decimal (5246996) and hexadecimal (0x501014) input
-      bits = root[UpperCase_P(parm_uc, PSTR(D_JSON_RF_BITS))];
-      protocol = root[UpperCase_P(parm_uc, PSTR(D_JSON_RF_PROTOCOL))];
-      repeat = root[UpperCase_P(parm_uc, PSTR(D_JSON_RF_REPEAT))];
-      pulse = root[UpperCase_P(parm_uc, PSTR(D_JSON_RF_PULSE))];
+      data = root.getULong(PSTR(D_JSON_RF_DATA), data);	// read payload data even >32bit
+      bits = root.getUInt(PSTR(D_JSON_RF_BITS), bits);
+      protocol = root.getInt(PSTR(D_JSON_RF_PROTOCOL), protocol);
+      repeat = root.getInt(PSTR(D_JSON_RF_REPEAT), repeat);
+      pulse = root.getInt(PSTR(D_JSON_RF_PULSE), pulse);
     } else {
       //  RFsend data, bits, protocol, repeat, pulse
       char *p;
@@ -142,8 +195,8 @@ void CmndRfSend(void)
 
     if (!protocol) { protocol = 1; }
     mySwitch.setProtocol(protocol);
-    if (!pulse) { pulse = 350; }      // Default pulse length for protocol 1
-    mySwitch.setPulseLength(pulse);
+    // if pulse is specified in the command, enforce the provided value (otherwise lib takes default)
+    if (pulse) { mySwitch.setPulseLength(pulse); }
     if (!repeat) { repeat = 10; }     // Default at init
     mySwitch.setRepeatTransmit(repeat);
     if (!bits) { bits = 24; }         // Default 24 bits
@@ -169,17 +222,15 @@ bool Xdrv17(uint8_t function)
 {
   bool result = false;
 
-  if ((pin[GPIO_RFSEND] < 99) || (pin[GPIO_RFRECV] < 99)) {
+  if (PinUsed(GPIO_RFSEND) || PinUsed(GPIO_RFRECV)) {
     switch (function) {
       case FUNC_EVERY_50_MSECOND:
-        if (pin[GPIO_RFRECV] < 99) {
+        if (PinUsed(GPIO_RFRECV)) {
           RfReceiveCheck();
         }
         break;
       case FUNC_COMMAND:
-        if (pin[GPIO_RFSEND] < 99) {
-          result = DecodeCommand(kRfSendCommands, RfSendCommand);
-        }
+        result = DecodeCommand(kRfCommands, RfCommands);
         break;
       case FUNC_INIT:
         RfInit();

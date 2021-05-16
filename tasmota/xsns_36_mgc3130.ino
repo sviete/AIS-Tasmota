@@ -1,7 +1,7 @@
 /*
   xsns_36_MGC3130.ino - Support for I2C MGC3130 Electric Field Sensor for Tasmota
 
-  Copyright (C) 2019  Christian Baars & Theo Arends
+  Copyright (C) 2021  Christian Baars & Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -33,18 +33,16 @@
 \*********************************************************************************************/
 
 #define XSNS_36                 36
+#define XI2C_27                 27  // See I2CDEVICES.md
 
 #warning **** MGC3130: It is recommended to disable all unneeded I2C-drivers ****
 
 #define MGC3130_I2C_ADDR        0x42
 
-#define MGC3130_xfer            pin[GPIO_MGC3130_XFER]
-#define MGC3130_reset           pin[GPIO_MGC3130_RESET]
-
-
+int8_t MGC3130_xfer = 0;
+int8_t MGC3130_reset = 0;
 bool MGC3130_type = false;
-char MGC3130stype[8];
-
+char MGC3130stype[] = "MGC3130";
 
 #define MGC3130_SYSTEM_STATUS 0x15
 #define MGC3130_REQUEST_MSG   0x06
@@ -71,7 +69,8 @@ const char HTTP_MGC_3130_SNS[] PROGMEM =
   "{s}" "%s" "{m}%s{e}"
   "{s}" "HwRev" "{m}%u.%u{e}"
   "{s}" "loaderVer" "{m}%u.%u{e}"
-  "{s}" "platVer" "{m}%u{e}";      // {s} = <tr><th>, {m} = </th><td>, {e} = </td></tr>
+  "{s}" "platVer" "{m}%u{e}"
+  "{s}" "NoisePower" "{m}%s{e}";      // {s} = <tr><th>, {m} = </th><td>, {e} = </td></tr>
 #endif  // USE_WEBSERVER
 
 
@@ -154,17 +153,18 @@ union MGC3130_Union{
     float SDData[4]; // signal deviation
   } out;
   struct {
-    uint8_t header[3];
+    uint8_t header[4];
     // payload
-    uint8_t valid;
+    uint8_t valid; // 0xAA is valid
     uint8_t hwRev[2];
     uint8_t parameterStartAddr;
     uint8_t loaderVersion[2];
     uint8_t loaderPlatform;
-    uint8_t fwStartAddr;
+    uint8_t fwStartAddr; // should be 0x20
     char fwVersion[120];
   } fw;
   struct{
+    uint8_t header[4];
     uint8_t id;
     uint8_t size;
     uint16_t error;
@@ -182,7 +182,7 @@ int16_t MGC3130_rotValue, MGC3130_lastSentRotValue = 0;
 uint16_t MGC3130_lastSentX, MGC3130_lastSentY, MGC3130_lastSentZ = 0;
 
 uint8_t hwRev[2], loaderVersion[2], loaderPlatform = 0;
-char MGC3130_firmwareInfo[20];
+float MGC3130_noisePower = -1;
 
 uint8_t MGC3130_touchTimeout = 0;
 uint16_t MGC3130_touchCounter = 1; // measure how long you touch the surface in loop cycles
@@ -196,41 +196,35 @@ uint8_t MGC3130_mode = 1; // 1-gesture; 2-airwheel; 3-position
 uint8_t MGC3130autoCal[] = {0x10, 0x00, 0x00, 0xA2, 0x80, 0x00 , 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
 uint8_t MGC3130disableAirwheel[] = {0x10, 0x00, 0x00, 0xA2, 0x90, 0x00 , 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00};
 uint8_t MGC3130enableAirwheel[] = {0x10, 0x00, 0x00, 0xA2, 0x90, 0x00 , 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00};
-
-void MGC3130_triggerTele(){
-    mqtt_data[0] = '\0';
-    if (MqttShowSensor()) {
-      MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);
-    #ifdef USE_RULES
-      RulesTeleperiod();  // Allow rule based HA messages
-    #endif  // USE_RULES
-    }
-}
+uint8_t MGC3130enableAll[] = {0x10, 0x00, 0x00, 0xA2, 0xA0, 0x00 , 0x00, 0x00, 0x3f, 0x18, 0x00, 0x00, 0x3f, 0x18, 0x00, 0x00};
 
 void MGC3130_handleSensorData(){
       if ( MGC_data.out.outputConfigMask.touchInfo && MGC3130_touchTimeout == 0){
         if (MGC3130_handleTouch()){
             MGC3130_triggeredByTouch = true;
-            MGC3130_triggerTele();
+            MqttPublishSensor();
         }
       }
 
       if(MGC3130_mode == 1){
         if( MGC_data.out.outputConfigMask.gestureInfo && MGC_data.out.gestureInfo.gestureCode > 0){
           MGC3130_handleGesture();
-          MGC3130_triggerTele();
+          MqttPublishSensor();
         }
       }
       if(MGC3130_mode == 2){
         if(MGC_data.out.outputConfigMask.airWheelInfo && MGC_data.out.systemInfo.airWheelValid){
           MGC3130_handleAirWheel();
-          MGC3130_triggerTele();
+          MqttPublishSensor();
         }
       }
       if(MGC3130_mode == 3){
         if(MGC_data.out.systemInfo.positionValid && (MGC_data.out.z > MGC3130_MIN_ZVALUE)){
-          MGC3130_triggerTele();
-          }
+          MqttPublishSensor();
+        }
+      }
+      if(MGC_data.out.systemInfo.noisePowerValid){
+        MGC3130_noisePower = MGC_data.out.noisePower;
       }
 }
 
@@ -244,7 +238,6 @@ void MGC3130_sendMessage(uint8_t data[], uint8_t length){
 
 
 void MGC3130_handleGesture(){
-  //char log[LOGSZ];
   char edge[5];
   if (MGC_data.out.gestureInfo.edgeFlick){
     snprintf_P(edge, sizeof(edge), PSTR("ED_"));
@@ -254,141 +247,138 @@ void MGC3130_handleGesture(){
   }
   switch(MGC_data.out.gestureInfo.gestureCode){
     case MGC3130_GESTURE_GARBAGE:
-    //snprintf_P(log, sizeof(log), PSTR("NONE"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("NONE"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("NONE"));
     break;
     case MGC3130_FLICK_WEST_EAST:
-    //snprintf_P(log, sizeof(log), PSTR("%sFL_WE"), edge);
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("%sFL_WE"), edge);
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("%sFL_WE"), edge);
     break;
     case MGC3130_FLICK_EAST_WEST:
-    //snprintf_P(log, sizeof(log), PSTR("%sFL_EW"), edge);
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("%sFL_EW"), edge);
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("%sFL_EW"), edge);
     break;
     case MGC3130_FLICK_SOUTH_NORTH:
-    //snprintf_P(log, sizeof(log), PSTR("%sFL_SN"), edge);
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("%sFL_SN"), edge);
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("%sFL_SN"), edge);
     break;
     case MGC3130_FLICK_NORTH_SOUTH:
-    //snprintf_P(log, sizeof(log), PSTR("%sFL_NS"), edge);
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("%sFL_NS"), edge);
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("%sFL_NS"), edge);
     break;
     case MGC3130_CIRCLE_CLOCKWISE:
-    //snprintf_P(log, sizeof(log), PSTR("CW"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("CW"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("CW"));
     break;
     case MGC3130_CIRCLE_CCLOCKWISE:
-    //snprintf_P(log, sizeof(log), PSTR("CCW"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("CCW"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("CCW"));
     break;
   }
-  //AddLog_P(LOG_LEVEL_DEBUG, log);
 }
 
 bool MGC3130_handleTouch(){
-  //char log[LOGSZ];
   bool success = false; // if we find a touch of higher order, we are done
     if  (MGC_data.out.touchInfo.doubleTapCentre && !success){
-    //snprintf_P(log, sizeof(log), PSTR("DTAP_CENTRE"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("DTAP_CENTRE"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("DT_C"));
     MGC3130_touchTimeout = 5;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.doubleTapEast && !success){
-    //snprintf_P(log, sizeof(log), PSTR("DTAP_EAST"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("DTAP_EAST"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("DT_E"));
     MGC3130_touchTimeout = 5;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.doubleTapNorth && !success){
-    //snprintf_P(log, sizeof(log), PSTR("DTAP_NORTH"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("DTAP_NORTH"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("DT_N"));
     MGC3130_touchTimeout = 5;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.doubleTapWest && !success){
-    //snprintf_P(log, sizeof(log), PSTR("DTAP_WEST"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("DTAP_WEST"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("DT_W"));
     MGC3130_touchTimeout = 5;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.doubleTapSouth && !success){
-    //snprintf_P(log, sizeof(log), PSTR("DTAP_SOUTH"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("DTAP_SOUTH"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("DT_S"));
     MGC3130_touchTimeout = 5;
     success = true;
     MGC3130_touchCounter = 1;
     }
     if (MGC_data.out.touchInfo.tapCentre && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TAP_CENTRE"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TAP_CENTRE"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TP_C"));
     MGC3130_touchTimeout = 2;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.tapEast && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TAP_EAST"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TAP_EAST"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TP_E"));
     MGC3130_touchTimeout = 2;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.tapNorth && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TAP_NORTH"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TAP_NORTH"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TP_N"));
     MGC3130_touchTimeout = 2;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.tapWest && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TAP_WEST"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TAP_WEST"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TP_W"));
     MGC3130_touchTimeout = 2;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.tapSouth && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TAP_SOUTH"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TAP_SOUTH"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TP_S"));
     MGC3130_touchTimeout = 2;
     success = true;
     MGC3130_touchCounter = 1;
     }
     else if (MGC_data.out.touchInfo.touchCentre && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TOUCH_CENTRE"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TOUCH_CENTRE"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TH_C"));
     success = true;
     MGC3130_touchCounter++; // This will reset to 0 after touching for approx. 1h and 50 minutes ;)
     }
     else if (MGC_data.out.touchInfo.touchEast && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TOUCH_EAST"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TOUCH_EAST"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TH_E"));
     success = true;
     MGC3130_touchCounter++;
     }
     else if (MGC_data.out.touchInfo.touchNorth && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TOUCH_NORTH"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TOUCH_NORTH"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TH_N"));
     success = true;
     MGC3130_touchCounter++;
     }
     else if (MGC_data.out.touchInfo.touchWest && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TOUCH_WEST"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TOUCH_WEST"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TH_W"));
     success = true;
     MGC3130_touchCounter++;
     }
     else if (MGC_data.out.touchInfo.touchSouth && !success){
-    //snprintf_P(log, sizeof(log), PSTR("TOUCH_SOUTH"));
+    //AddLog(LOG_LEVEL_DEBUG, PSTR("TOUCH_SOUTH"));
     snprintf_P(MGC3130_currentGesture, sizeof(MGC3130_currentGesture), PSTR("TH_S"));
     success = true;
     MGC3130_touchCounter++;
     }
-  //AddLog_P(LOG_LEVEL_DEBUG, log);
   return success;
 }
 
@@ -406,7 +396,7 @@ void MGC3130_handleAirWheel(){
 }
 
 void MGC3130_handleSystemStatus(){
-  //Serial.println("Got System status");
+    AddLog(LOG_LEVEL_DEBUG,PSTR("MGC3130: system_status: response to ID:%02x, error code: %04x"),MGC_data.status.id, MGC_data.status.error);
 }
 
 bool MGC3130_receiveMessage(){
@@ -419,16 +409,15 @@ bool MGC3130_receiveMessage(){
           MGC3130_handleSystemStatus();
           break;
         case MGC3130_FW_VERSION:
-          hwRev[0] = MGC_data.fw.hwRev[1];
-          hwRev[1] = MGC_data.fw.hwRev[0];
-          loaderVersion[0] = MGC_data.fw.loaderVersion[0];
-          loaderVersion[1] = MGC_data.fw.loaderVersion[1];
+          hwRev[1] = MGC_data.fw.hwRev[1];
+          hwRev[0] = MGC_data.fw.hwRev[0];
+          loaderVersion[1] = MGC_data.fw.loaderVersion[0];
+          loaderVersion[0] = MGC_data.fw.loaderVersion[1];
           loaderPlatform = MGC_data.fw.loaderPlatform;
-          snprintf_P(MGC3130_firmwareInfo, sizeof(MGC3130_firmwareInfo), PSTR("FW: %s"), MGC_data.fw.fwVersion);
-          MGC3130_firmwareInfo[20] = '\0';
-          // Serial.print(MGC3130_firmwareInfo);
+          AddLog(LOG_LEVEL_INFO,PSTR("MGC3130: GestIC:%s"),MGC_data.fw.fwVersion);
           break;
       }
+    MGC_data.out.id  = 0;
     return true;
   }
   return false;
@@ -436,11 +425,12 @@ bool MGC3130_receiveMessage(){
 
 bool MGC3130_readData()
 {
+  static uint8_t _lastCounter = 0;
   bool success = false;
   if (!digitalRead(MGC3130_xfer)){
     pinMode(MGC3130_xfer, OUTPUT);
     digitalWrite(MGC3130_xfer, LOW);
-    Wire.requestFrom(MGC3130_I2C_ADDR, (uint16_t)32); // request usual data output
+    Wire.requestFrom(MGC3130_I2C_ADDR, (uint16_t)132); // request maximal data output
 
     MGC_data.buffer[0] = 4; // read at least header, but update after first read anyway
     unsigned char i = 0;
@@ -450,6 +440,14 @@ bool MGC3130_readData()
       }
     digitalWrite(MGC3130_xfer, HIGH);
     pinMode(MGC3130_xfer, INPUT);
+    uint8_t _mismatch = MGC_data.out.counter - _lastCounter;
+    if(_mismatch != 1){
+      if(i>4 && MGC_data.out.id != MGC3130_FW_VERSION){
+        AddLog(LOG_LEVEL_DEBUG,PSTR("MGC3130: missed a packet, mismatch: %u"), _mismatch - 1);
+        AddLogBuffer(LOG_LEVEL_DEBUG,MGC_data.buffer,i);
+      }
+    }
+    _lastCounter = MGC_data.out.counter;
     success = true;
   }
   return success;
@@ -483,12 +481,12 @@ void MGC3130_loop()
   MGC3130_receiveMessage();
 }
 
-
-bool MGC3130_detect(void)
+void MGC3130_detect(void)
 {
-  if (MGC3130_type){
-    return true;
-  }
+  if (MGC3130_type || I2cActive(MGC3130_I2C_ADDR)) { return; }
+
+  MGC3130_xfer = Pin(GPIO_MGC3130_XFER);
+  MGC3130_reset = Pin(GPIO_MGC3130_RESET);
 
   pinMode(MGC3130_xfer, INPUT_PULLUP);
   pinMode(MGC3130_reset,  OUTPUT);
@@ -497,17 +495,11 @@ bool MGC3130_detect(void)
   digitalWrite(MGC3130_reset, HIGH);
   delay(50);
 
-  bool success = false;
-  success = MGC3130_receiveMessage(); // This should read the firmware info
-  if (success) {
-    strcpy_P(MGC3130stype, PSTR("MGC3130"));
-    AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, MGC3130stype, MGC3130_I2C_ADDR);
+  if (MGC3130_receiveMessage()) {  // This should read the firmware info
+    I2cSetActiveFound(MGC3130_I2C_ADDR, MGC3130stype);
     MGC3130_currentGesture[0] = '\0';
     MGC3130_type = true;
-  } else {
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("MGC3130 did not respond at address 0x%x"), MGC3130_I2C_ADDR);
   }
-  return success;
 }
 
 /*********************************************************************************************\
@@ -555,7 +547,9 @@ void MGC3130_show(bool json)
     }
 #ifdef USE_WEBSERVER
   } else {
-    WSContentSend_PD(HTTP_MGC_3130_SNS, MGC3130stype, status_chr, hwRev[0], hwRev[1], loaderVersion[0], loaderVersion[1], loaderPlatform );
+    char _noise[FLOATSZ];
+    dtostrfd(MGC3130_noisePower, 2, _noise);
+    WSContentSend_PD(HTTP_MGC_3130_SNS, MGC3130stype, status_chr, hwRev[0], hwRev[1], loaderVersion[0], loaderVersion[1], loaderPlatform, _noise);
 #endif  // USE_WEBSERVER
   }
 }
@@ -570,6 +564,7 @@ void MGC3130_show(bool json)
  * Sensor36 | 1       | Gesture Mode
  * Sensor36 | 2       | Airwheel Mode
  * Sensor36 | 3       | Position Mode with x,y,z - z must be higher than half of the max. sensing height
+ * Sensor36 | 4       | Enable all data for debugging (noise level in web GUI)
 \*********************************************************************************************/
 
 bool MGC3130CommandSensor()
@@ -591,8 +586,12 @@ bool MGC3130CommandSensor()
     case 3: // position & touch
       MGC3130_mode = 3;
       MGC3130_sendMessage(MGC3130disableAirwheel,16);
-    break;
+      break;
+    case 4: // enable all readings for noise level for web GUI
+      MGC3130_sendMessage(MGC3130enableAll,16);
+      break;
   }
+  Response_P(PSTR("{\"MGC3130\":{\"mode\":%d}}"), MGC3130_mode);
   return serviced;
 }
 
@@ -602,31 +601,31 @@ bool MGC3130CommandSensor()
 
 bool Xsns36(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_27)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if ((FUNC_INIT == function) && (pin[GPIO_MGC3130_XFER] < 99) && (pin[GPIO_MGC3130_RESET] < 99)) {
-      MGC3130_detect();
-    }
-    else if (MGC3130_type) {
-      switch (function) {
-        case FUNC_EVERY_50_MSECOND:
-          MGC3130_loop();
-          break;
-        case FUNC_COMMAND_SENSOR:
-          if (XSNS_36 == XdrvMailbox.index) {
-            result = MGC3130CommandSensor();
-          }
-          break;
-        case FUNC_JSON_APPEND:
-          MGC3130_show(1);
-          break;
+  if ((FUNC_INIT == function) && PinUsed(GPIO_MGC3130_XFER) && PinUsed(GPIO_MGC3130_RESET)) {
+    MGC3130_detect();
+  }
+  else if (MGC3130_type) {
+    switch (function) {
+      case FUNC_EVERY_50_MSECOND:
+        MGC3130_loop();
+        break;
+      case FUNC_COMMAND_SENSOR:
+        if (XSNS_36 == XdrvMailbox.index) {
+          result = MGC3130CommandSensor();
+        }
+        break;
+      case FUNC_JSON_APPEND:
+        MGC3130_show(1);
+        break;
 #ifdef USE_WEBSERVER
-        case FUNC_WEB_SENSOR:
-          MGC3130_show(0);
-          break;
+      case FUNC_WEB_SENSOR:
+        MGC3130_show(0);
+        break;
 #endif  // USE_WEBSERVER
-      }
     }
   }
   return result;

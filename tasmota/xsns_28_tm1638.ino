@@ -1,7 +1,7 @@
 /*
   xsns_28_tm1638.ino - TM1638 8 switch, led and 7 segment unit support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 /*********************************************************************************************\
  * TM1638 8 switch, led and 7 segment
  *
- * Uses GPIO TM16 DIO, TM16 CLK and TM16 STB
+ * Uses GPIO TM1638 DIO, TM1638 CLK and TM1638 STB
 \*********************************************************************************************/
 
 #define XSNS_28             28
@@ -33,9 +33,9 @@
 #define TM1638_CLOCK_DELAY  1  // uSec
 
 uint8_t tm1638_type = 1;
-uint8_t tm1638_clock_pin = 0;
-uint8_t tm1638_data_pin = 0;
-uint8_t tm1638_strobe_pin = 0;
+int8_t tm1638_clock_pin = 0;
+int8_t tm1638_data_pin = 0;
+int8_t tm1638_strobe_pin = 0;
 uint8_t tm1638_displays = 8;
 uint8_t tm1638_active_display = 1;
 uint8_t tm1638_intensity = 0;
@@ -144,10 +144,10 @@ uint8_t Tm1638GetButtons(void)
 void TmInit(void)
 {
   tm1638_type = 0;
-  if ((pin[GPIO_TM16CLK] < 99) && (pin[GPIO_TM16DIO] < 99) && (pin[GPIO_TM16STB] < 99)) {
-    tm1638_clock_pin = pin[GPIO_TM16CLK];
-    tm1638_data_pin = pin[GPIO_TM16DIO];
-    tm1638_strobe_pin = pin[GPIO_TM16STB];
+  if (PinUsed(GPIO_TM1638CLK) && PinUsed(GPIO_TM1638DIO) && PinUsed(GPIO_TM1638STB)) {
+    tm1638_clock_pin = Pin(GPIO_TM1638CLK);
+    tm1638_data_pin = Pin(GPIO_TM1638DIO);
+    tm1638_strobe_pin = Pin(GPIO_TM1638STB);
 
     pinMode(tm1638_data_pin, OUTPUT);
     pinMode(tm1638_clock_pin, OUTPUT);

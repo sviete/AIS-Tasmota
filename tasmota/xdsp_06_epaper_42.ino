@@ -1,7 +1,7 @@
 /*
   xdsp_05_epaper.ino - Display e-paper support for Tasmota
 
-  Copyright (C) 2019  Theo Arends, Gerhard Mutz and Waveshare
+  Copyright (C) 2021  Theo Arends, Gerhard Mutz and Waveshare
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -34,20 +34,18 @@
 #include <epd4in2.h>
 #include <epdpaint.h>
 
-extern uint8_t *buffer;
+bool epd42_init_done = false;
 
 Epd42 *epd42;
 
 
 /*********************************************************************************************/
 
-void EpdInitDriver42()
-{
-  if (!Settings.display_model) {
-    Settings.display_model = XDSP_06;
-  }
+void EpdInitDriver42() {
+  if (PinUsed(GPIO_EPAPER42_CS) &&
+     ((TasmotaGlobal.soft_spi_enabled & SPI_MOSI) || (TasmotaGlobal.spi_enabled & SPI_MOSI))) {
 
-  if (XDSP_06 == Settings.display_model) {
+    Settings.display_model = XDSP_06;
 
     if (Settings.display_width != EPD_WIDTH42) {
       Settings.display_width = EPD_WIDTH42;
@@ -56,29 +54,15 @@ void EpdInitDriver42()
       Settings.display_height = EPD_HEIGHT42;
     }
 
-    // allocate screen buffer
-    if (buffer) free(buffer);
-    buffer=(unsigned char*)calloc((EPD_WIDTH42 * EPD_HEIGHT42) / 8,1);
-    if (!buffer) return;
-
     // init renderer
-    epd42  = new Epd42(EPD_WIDTH42,EPD_HEIGHT42);
+    epd42  = new Epd42(EPD_WIDTH42, EPD_HEIGHT42);
 
-    #ifdef USE_SPI
-        if ((pin[GPIO_SSPI_CS]<99) && (pin[GPIO_SSPI_MOSI]<99) && (pin[GPIO_SSPI_SCLK]<99)) {
-          epd42->Begin(pin[GPIO_SSPI_CS],pin[GPIO_SSPI_MOSI],pin[GPIO_SSPI_SCLK]);
-        } else {
-          free(buffer);
-          return;
-        }
-    #else
-        if ((pin[GPIO_SPI_CS]<99) && (pin[GPIO_SPI_MOSI]<99) && (pin[GPIO_SPI_CLK]<99)) {
-          epd42->Begin(pin[GPIO_SPI_CS],pin[GPIO_SPI_MOSI],pin[GPIO_SPI_CLK]);
-        } else {
-          free(buffer);
-          return;
-        }
-    #endif
+    if (TasmotaGlobal.soft_spi_enabled) {
+      epd42->Begin(Pin(GPIO_EPAPER42_CS), Pin(GPIO_SSPI_MOSI), Pin(GPIO_SSPI_SCLK));
+    }
+    else if (TasmotaGlobal.spi_enabled) {
+      epd42->Begin(Pin(GPIO_EPAPER42_CS), Pin(GPIO_SPI_MOSI), Pin(GPIO_SPI_CLK));
+    }
 
     renderer = epd42;
 
@@ -105,6 +89,8 @@ void EpdInitDriver42()
     renderer->fillScreen(0);
 #endif
 
+    epd42_init_done = true;
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: E-Paper 4.2"));
   }
 }
 
@@ -134,26 +120,23 @@ bool Xdsp06(uint8_t function)
 {
   bool result = false;
 
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      EpdInitDriver42();
-    }
-    else if (XDSP_06 == Settings.display_model) {
-
-      switch (function) {
-        case FUNC_DISPLAY_MODEL:
-          result = true;
-          break;
-
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    EpdInitDriver42();
+  }
+  else if (epd42_init_done && (XDSP_06 == Settings.display_model)) {
+    switch (function) {
+      case FUNC_DISPLAY_MODEL:
+        result = true;
+        break;
 #ifdef USE_DISPLAY_MODES1TO5
-        case FUNC_DISPLAY_EVERY_SECOND:
-          EpdRefresh42();
-          break;
+      case FUNC_DISPLAY_EVERY_SECOND:
+        EpdRefresh42();
+        break;
 #endif  // USE_DISPLAY_MODES1TO5
-      }
     }
+  }
   return result;
 }
-
 
 #endif  // USE_DISPLAY_EPAPER42
 #endif  // USE_DISPLAY

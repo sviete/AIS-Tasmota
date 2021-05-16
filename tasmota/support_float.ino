@@ -1,7 +1,7 @@
 /*
   support_float.ino - Small floating point support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Stephan Hadinger
+  Copyright (C) 2021  Theo Arends and Stephan Hadinger
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -16,9 +16,6 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-
-//#ifdef ARDUINO_ESP8266_RELEASE_2_3_0
-// Functions not available in 2.3.0
 
 float fmodf(float x, float y)
 {
@@ -83,7 +80,6 @@ float fmodf(float x, float y)
   ux.i = uxi;
   return ux.f;
 }
-//#endif  // ARDUINO_ESP8266_RELEASE_2_3_0
 
 double FastPrecisePow(double a, double b)
 {
@@ -120,14 +116,14 @@ double TaylorLog(double x)
   // https://stackoverflow.com/questions/46879166/finding-the-natural-logarithm-of-a-number-using-taylor-series-in-c
 
   if (x <= 0.0) { return NAN; }
+  if (x == 1.0) { return 0; }
   double z = (x + 1) / (x - 1);                              // We start from power -1, to make sure we get the right power in each iteration;
   double step = ((x - 1) * (x - 1)) / ((x + 1) * (x + 1));   // Store step to not have to calculate it each time
   double totalValue = 0;
   double powe = 1;
-  double y;
   for (uint32_t count = 0; count < 10; count++) {            // Experimental number of 10 iterations
     z *= step;
-    y = (1 / powe) * z;
+    double y = (1 / powe) * z;
     totalValue = totalValue + y;
     powe = powe + 2;
   }
@@ -140,7 +136,7 @@ double TaylorLog(double x)
   dtostrfd(log1, 8, log1s);
   char log2s[33];
   dtostrfd(totalValue, 8, log2s);
-  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("input %s, log %s, taylor %s"), logxs, log1s, log2s);
+  AddLog(LOG_LEVEL_DEBUG, PSTR("input %s, log %s, taylor %s"), logxs, log1s, log2s);
 */
   return totalValue;
 }
@@ -173,6 +169,7 @@ double const f_sixthpi      = f_pi / 6.0;                   // f_pi/6.0, used in
 double const f_tansixthpi   = tan(f_sixthpi);               // tan(f_pi/6), used in atan routines
 double const f_twelfthpi    = f_pi / 12.0;                  // f_pi/12.0, used in atan routines
 double const f_tantwelfthpi = tan(f_twelfthpi);             // tan(f_pi/12), used in atan routines
+float  const f_180pi        = 180 / f_pi;                   // 180 / pi for angles in degrees
 
 // *******************************************************************
 // ***
@@ -218,6 +215,7 @@ float cos_52(float x)
     case 2: return -cos_52s(x-(float)f_pi);
     case 3: return  cos_52s((float)f_twopi - x);
   }
+  return 0.0;  // Never reached. Fixes compiler warning
 }
 //
 // The sine is just cosine shifted a half-f_pi, so
@@ -278,6 +276,7 @@ float tan_56(float x)
     case 6: return -1.0f / tan_56s((x-(float)f_threehalfpi)   * (float)f_four_over_pi);
     case 7: return -       tan_56s(((float)f_twopi - x)       * (float)f_four_over_pi);
   }
+  return 0.0;  // Never reached. Fixes compiler warning
 }
 
 // *******************************************************************
@@ -376,18 +375,19 @@ float sqrt1(const float x)
 // changeUIntScale
 // Change a value for range a..b to c..d, using only unsigned int math
 //
+// New version, you don't need the "to_min < to_max" precondition anymore
+//
 // PRE-CONDITIONS (if not satisfied, you may 'halt and catch fire')
 //    from_min < from_max  (not checked)
-//    to_min   < to_max    (not checked)
-//    from_min <= num <= from-max  (chacked)
+//    from_min <= num <= from_max  (checked)
 // POST-CONDITIONS
 //    to_min <= result <= to_max
 //
 uint16_t changeUIntScale(uint16_t inum, uint16_t ifrom_min, uint16_t ifrom_max,
                                        uint16_t ito_min, uint16_t ito_max) {
   // guard-rails
-  if ((ito_min >= ito_max) || (ifrom_min >= ifrom_max)) {
-    return ito_min;  // invalid input, return arbitrary value
+  if (ifrom_min >= ifrom_max) {
+    return (ito_min > ito_max ? ito_max : ito_min);  // invalid input, return arbitrary value
   }
   // convert to uint31, it's more verbose but code is more compact
   uint32_t num = inum;
@@ -398,6 +398,15 @@ uint16_t changeUIntScale(uint16_t inum, uint16_t ifrom_min, uint16_t ifrom_max,
 
   // check source range
   num = (num > from_max ? from_max : (num < from_min ? from_min : num));
+
+  // check to_* order
+  if (to_min > to_max) {
+    // reverse order
+    num = (from_max - num) + from_min;
+    to_min = ito_max;
+    to_max = ito_min;
+  }
+
   uint32_t numerator = (num - from_min) * (to_max - to_min);
   uint32_t result;
   if (numerator >= 0x80000000L) {
@@ -407,4 +416,27 @@ uint16_t changeUIntScale(uint16_t inum, uint16_t ifrom_min, uint16_t ifrom_max,
     result = (((numerator * 2) / (from_max - from_min)) + 1) / 2 + to_min;
   }
   return (uint32_t) (result > to_max ? to_max : (result < to_min ? to_min : result));
+}
+
+// Force a float value between two ranges, and adds or substract the range until we fit
+float ModulusRangef(float f, float a, float b) {
+  if (b <= a) { return a; }       // inconsistent, do what we can
+  float range = b - a;
+  float x = f - a;                // now range of x should be 0..range
+  x = fmodf(x, range);            // actual range is now -range..range
+  if (x < 0.0f) { x += range; }   // actual range is now 0..range
+  return x + a;                   // returns range a..b
+}
+
+// Compute a n-degree polynomial for value x and an array of coefficient (by increasing order)
+// Ex:
+// For factors = { f0, f1, f2, f3 }
+// Returns : f0 + f1 x + f2 x^2, + f3 x^3
+// Internally computed as : f0 + x (f1 + x (f2 + x f3))
+float Polynomialf(const float *factors, uint32_t degree, float x) {
+  float r = 0.0f;
+  for (uint32_t i = degree - 1; i >= 0; i--) {
+    r = r * x + factors[i];
+  }
+  return r;
 }

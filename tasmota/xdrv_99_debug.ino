@@ -1,7 +1,7 @@
 /*
   xdrv_99_debug.ino - debug support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -25,8 +25,6 @@
 #endif  // USE_DEBUG_DRIVER
 #endif  // DEBUG_THEO
 
-//#define USE_DEBUG_SETTING_NAMES
-
 #ifdef USE_DEBUG_DRIVER
 /*********************************************************************************************\
  * Virtual debugging support - Part1
@@ -47,7 +45,6 @@
 #define D_CMND_CFGDUMP   "CfgDump"
 #define D_CMND_CFGPEEK   "CfgPeek"
 #define D_CMND_CFGPOKE   "CfgPoke"
-#define D_CMND_CFGSHOW   "CfgShow"
 #define D_CMND_CFGXOR    "CfgXor"
 #define D_CMND_CPUCHECK  "CpuChk"
 #define D_CMND_EXCEPTION "Exception"
@@ -61,36 +58,37 @@
 #define D_CMND_I2CREAD   "I2CRead"
 #define D_CMND_I2CSTRETCH "I2CStretch"
 #define D_CMND_I2CCLOCK  "I2CClock"
+#define D_CMND_SERBUFF   "SerBufSize"
 
 const char kDebugCommands[] PROGMEM = "|"  // No prefix
   D_CMND_CFGDUMP "|" D_CMND_CFGPEEK "|" D_CMND_CFGPOKE "|"
-#ifdef USE_DEBUG_SETTING_NAMES
-  D_CMND_CFGSHOW "|"
-#endif
 #ifdef USE_WEBSERVER
   D_CMND_CFGXOR "|"
 #endif
-  D_CMND_CPUCHECK "|"
+  D_CMND_CPUCHECK "|" D_CMND_SERBUFF "|"
 #ifdef DEBUG_THEO
   D_CMND_EXCEPTION "|"
 #endif
   D_CMND_FLASHDUMP "|" D_CMND_FLASHMODE "|" D_CMND_FREEMEM"|" D_CMND_HELP "|" D_CMND_RTCDUMP "|" D_CMND_SETSENSOR "|"
-  D_CMND_I2CWRITE "|" D_CMND_I2CREAD "|" D_CMND_I2CSTRETCH "|" D_CMND_I2CCLOCK ;
+#ifdef USE_I2C
+  D_CMND_I2CWRITE "|" D_CMND_I2CREAD "|" D_CMND_I2CSTRETCH "|" D_CMND_I2CCLOCK
+#endif
+  ;
 
 void (* const DebugCommand[])(void) PROGMEM = {
   &CmndCfgDump, &CmndCfgPeek, &CmndCfgPoke,
-#ifdef USE_DEBUG_SETTING_NAMES
-  &CmndCfgShow,
-#endif
 #ifdef USE_WEBSERVER
   &CmndCfgXor,
 #endif
-  &CmndCpuCheck,
+  &CmndCpuCheck, &CmndSerBufSize,
 #ifdef DEBUG_THEO
   &CmndException,
 #endif
   &CmndFlashDump, &CmndFlashMode, &CmndFreemem, &CmndHelp, &CmndRtcDump, &CmndSetSensor,
-  &CmndI2cWrite, &CmndI2cRead, &CmndI2cStretch, &CmndI2cClock };
+#ifdef USE_I2C
+  &CmndI2cWrite, &CmndI2cRead, &CmndI2cStretch, &CmndI2cClock
+#endif
+  };
 
 uint32_t CPU_loops = 0;
 uint32_t CPU_last_millis = 0;
@@ -142,7 +140,7 @@ Decoding 14 results
 0x40201118: atol at C:\Data2\Arduino\arduino-1.8.1-esp-2.3.0\portable\packages\esp8266\hardware\esp8266\2.3.0\cores\esp8266/core_esp8266_noniso.c line 45
 0x40201128: atoi at C:\Data2\Arduino\arduino-1.8.1-esp-2.3.0\portable\packages\esp8266\hardware\esp8266\2.3.0\cores\esp8266/core_esp8266_noniso.c line 45
 
-00:00:08 MQTT: tele/sonoff/INFO3 = {"Started":"Fatal exception:28 flag:2 (EXCEPTION) epc1:0x4000bf64 epc2:0x00000000 epc3:0x00000000 excvaddr:0x00000007 depc:0x00000000"}
+00:00:08 MQTT: tele/tasmota/INFO3 = {"Started":"Fatal exception:28 flag:2 (EXCEPTION) epc1:0x4000bf64 epc2:0x00000000 epc3:0x00000000 excvaddr:0x00000007 depc:0x00000000"}
 */
   if (1 == type) {
     char svalue[10];
@@ -174,13 +172,13 @@ void CpuLoadLoop(void)
     CPU_loops ++;
     if ((CPU_last_millis + (CPU_load_check *1000)) <= CPU_last_loop_time) {
 #if defined(F_CPU) && (F_CPU == 160000000L)
-      int CPU_load = 100 - ( (CPU_loops*(1 + 30*sleep)) / (CPU_load_check *800) );
+      int CPU_load = 100 - ( (CPU_loops*(1 + 30*TasmotaGlobal.sleep)) / (CPU_load_check *800) );
       CPU_loops = CPU_loops / CPU_load_check;
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, CPU %d%%(160MHz), Loops/sec %d"), ESP.getFreeHeap(), CPU_load, CPU_loops);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, CPU %d%%(160MHz), Loops/sec %d"), ESP.getFreeHeap(), CPU_load, CPU_loops);
 #else
-      int CPU_load = 100 - ( (CPU_loops*(1 + 30*sleep)) / (CPU_load_check *400) );
+      int CPU_load = 100 - ( (CPU_loops*(1 + 30*TasmotaGlobal.sleep)) / (CPU_load_check *400) );
       CPU_loops = CPU_loops / CPU_load_check;
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, CPU %d%%(80MHz), Loops/sec %d"), ESP.getFreeHeap(), CPU_load, CPU_loops);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, CPU %d%%(80MHz), Loops/sec %d"), ESP.getFreeHeap(), CPU_load, CPU_loops);
 #endif
       CPU_last_millis = CPU_last_loop_time;
       CPU_loops = 0;
@@ -190,24 +188,7 @@ void CpuLoadLoop(void)
 
 /*******************************************************************************************/
 
-#if defined(ARDUINO_ESP8266_RELEASE_2_3_0) || defined(ARDUINO_ESP8266_RELEASE_2_4_0) || defined(ARDUINO_ESP8266_RELEASE_2_4_1)
-// All version before core 2.4.2
-// https://github.com/esp8266/Arduino/issues/2557
-
-extern "C" {
-#include <cont.h>
-  extern cont_t g_cont;
-}
-
-void DebugFreeMem(void)
-{
-  register uint32_t *sp asm("a1");
-
-//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, FreeStack %d, UnmodifiedStack %d (%s)"), ESP.getFreeHeap(), 4 * (sp - g_cont.stack), cont_get_free_stack(&g_cont), XdrvMailbox.data);
-  AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, FreeStack %d (%s)"), ESP.getFreeHeap(), 4 * (sp - g_cont.stack), XdrvMailbox.data);
-}
-
-#else
+#ifdef ESP8266
 // All version from core 2.4.2
 // https://github.com/esp8266/Arduino/pull/5018
 // https://github.com/esp8266/Arduino/pull/4553
@@ -221,16 +202,49 @@ void DebugFreeMem(void)
 {
   register uint32_t *sp asm("a1");
 
-  AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, FreeStack %d (%s)"), ESP.getFreeHeap(), 4 * (sp - g_pcont->stack), XdrvMailbox.data);
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, FreeStack %d (%s)"), ESP.getFreeHeap(), 4 * (sp - g_pcont->stack), XdrvMailbox.data);
 }
 
-#endif  // ARDUINO_ESP8266_RELEASE_2_x_x
+#endif  // ESP8266
+#ifdef ESP32
+
+void DebugFreeMem(void)
+{
+  register uint8_t *sp asm("a1");
+
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "FreeRam %d, FreeStack %d (%s)"), ESP.getFreeHeap(), sp - pxTaskGetStackStart(NULL), XdrvMailbox.data);
+}
+
+#endif  // ESP8266 - ESP32
+
+/*******************************************************************************************/
+/*
+  Usage:
+
+  DebugTimer(1);
+
+  Code snippit to time
+
+  DebugTimer(0);
+*/
+
+void DebugTimer(bool start) {
+  static uint32_t timer = 0;
+
+  if (start) {
+    timer = micros();
+  } else {
+    timer = ((int32_t)(micros() - timer));
+    AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: ExecTime %d uS"), timer);
+  }
+}
 
 /*******************************************************************************************/
 
 void DebugRtcDump(char* parms)
 {
-  #define CFG_COLS 16
+#ifdef ESP8266
+  uint32_t CFG_COLS = 16;
 
   uint16_t idx;
   uint16_t maxrow;
@@ -254,7 +268,7 @@ void DebugRtcDump(char* parms)
   uint16_t srow = strtol(parms, &p, 16) / CFG_COLS;
   uint16_t mrow = strtol(p, &p, 10);
 
-//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("Cnfg: Parms %s, Start row %d, rows %d"), parms, srow, mrow);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("Cnfg: Parms %s, Start row %d, rows %d"), parms, srow, mrow);
 
   if (0 == mrow) {  // Default only 8 lines
     mrow = 8;
@@ -266,6 +280,7 @@ void DebugRtcDump(char* parms)
     maxrow = srow + mrow;
   }
 
+  char log_data[100];  // 020:  C7 2B 2E AB  70 E8 09 AE  C8 88 3D EA  7C FF 48 2F | +. p     = | H/|
   for (row = srow; row < maxrow; row++) {
     idx = row * CFG_COLS;
     snprintf_P(log_data, sizeof(log_data), PSTR("%03X:"), idx);
@@ -283,15 +298,66 @@ void DebugRtcDump(char* parms)
       snprintf_P(log_data, sizeof(log_data), PSTR("%s%c"), log_data, ((buffer[idx + col] > 0x20) && (buffer[idx + col] < 0x7F)) ? (char)buffer[idx + col] : ' ');
     }
     snprintf_P(log_data, sizeof(log_data), PSTR("%s|"), log_data);
-    AddLog(LOG_LEVEL_INFO);
+    AddLogData(LOG_LEVEL_INFO, log_data);
   }
+#endif  // ESP8266
 }
 
 /*******************************************************************************************/
 
+void DebugDump(uint32_t start, uint32_t size) {
+  uint32_t CFG_COLS = 32;
+
+  uint32_t idx;
+  uint32_t maxrow;
+  uint32_t row;
+  uint32_t col;
+  char *p;
+
+  uint8_t *buffer = (uint8_t *)&start;
+  maxrow = ((start + size + CFG_COLS) / CFG_COLS);
+
+  uint32_t srow = 0;
+  uint32_t mrow = maxrow;
+
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("Cnfg: Parms %s, Start row %d, rows %d"), parms, srow, mrow);
+
+  if (0 == mrow) {  // Default only 8 lines
+    mrow = 8;
+  }
+  if (srow > maxrow) {
+    srow = maxrow - mrow;
+  }
+  if (mrow < (maxrow - srow)) {
+    maxrow = srow + mrow;
+  }
+
+  char log_data[150];  // 020:  C7 2B 2E AB  70 E8 09 AE  C8 88 3D EA  7C FF 48 2F  0E A7 D7 BF  02 0E D7 7D  C9 6F B9 3A  1D 01 3F 28 | +. p     = | H/       } o :  ?(|
+  for (row = srow; row < maxrow; row++) {
+    idx = row * CFG_COLS;
+    snprintf_P(log_data, sizeof(log_data), PSTR("%03X:"), idx);
+    for (col = 0; col < CFG_COLS; col++) {
+      if (!(col%4)) {
+        snprintf_P(log_data, sizeof(log_data), PSTR("%s "), log_data);
+      }
+      snprintf_P(log_data, sizeof(log_data), PSTR("%s %02X"), log_data, buffer[idx + col]);
+    }
+    snprintf_P(log_data, sizeof(log_data), PSTR("%s |"), log_data);
+    for (col = 0; col < CFG_COLS; col++) {
+//      if (!(col%4)) {
+//        snprintf_P(log_data, sizeof(log_data), PSTR("%s "), log_data);
+//      }
+      snprintf_P(log_data, sizeof(log_data), PSTR("%s%c"), log_data, ((buffer[idx + col] > 0x20) && (buffer[idx + col] < 0x7F)) ? (char)buffer[idx + col] : ' ');
+    }
+    snprintf_P(log_data, sizeof(log_data), PSTR("%s|"), log_data);
+    AddLogData(LOG_LEVEL_INFO, log_data);
+    delay(1);
+  }
+}
+
 void DebugCfgDump(char* parms)
 {
-  #define CFG_COLS 16
+  uint32_t CFG_COLS = 16;
 
   uint16_t idx;
   uint16_t maxrow;
@@ -300,12 +366,12 @@ void DebugCfgDump(char* parms)
   char *p;
 
   uint8_t *buffer = (uint8_t *) &Settings;
-  maxrow = ((sizeof(SYSCFG)+CFG_COLS)/CFG_COLS);
+  maxrow = ((sizeof(Settings)+CFG_COLS)/CFG_COLS);
 
   uint16_t srow = strtol(parms, &p, 16) / CFG_COLS;
   uint16_t mrow = strtol(p, &p, 10);
 
-//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("Cnfg: Parms %s, Start row %d, rows %d"), parms, srow, mrow);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("Cnfg: Parms %s, Start row %d, rows %d"), parms, srow, mrow);
 
   if (0 == mrow) {  // Default only 8 lines
     mrow = 8;
@@ -317,6 +383,7 @@ void DebugCfgDump(char* parms)
     maxrow = srow + mrow;
   }
 
+  char log_data[100];  // 020:  6D 75 73 31  3A 38 30 2F  61 70 69 2F  61 72 64 75 |mus1:80/api/ardu|
   for (row = srow; row < maxrow; row++) {
     idx = row * CFG_COLS;
     snprintf_P(log_data, sizeof(log_data), PSTR("%03X:"), idx);
@@ -334,7 +401,7 @@ void DebugCfgDump(char* parms)
       snprintf_P(log_data, sizeof(log_data), PSTR("%s%c"), log_data, ((buffer[idx + col] > 0x20) && (buffer[idx + col] < 0x7F)) ? (char)buffer[idx + col] : ' ');
     }
     snprintf_P(log_data, sizeof(log_data), PSTR("%s|"), log_data);
-    AddLog(LOG_LEVEL_INFO);
+    AddLogData(LOG_LEVEL_INFO, log_data);
     delay(1);
   }
 }
@@ -344,7 +411,7 @@ void DebugCfgPeek(char* parms)
   char *p;
 
   uint16_t address = strtol(parms, &p, 16);
-  if (address > sizeof(SYSCFG)) address = sizeof(SYSCFG) -4;
+  if (address > sizeof(Settings)) address = sizeof(Settings) -4;
   address = (address >> 2) << 2;
 
   uint8_t *buffer = (uint8_t *) &Settings;
@@ -352,6 +419,7 @@ void DebugCfgPeek(char* parms)
   uint16_t data16 = (buffer[address +1] << 8) + buffer[address];
   uint32_t data32 = (buffer[address +3] << 24) + (buffer[address +2] << 16) + data16;
 
+  char log_data[100];  // 000: 09 12 00 10 |    | 0x09 (9), 0x1209 (4617), 0x10001209 (268440073)
   snprintf_P(log_data, sizeof(log_data), PSTR("%03X:"), address);
   for (uint32_t i = 0; i < 4; i++) {
     snprintf_P(log_data, sizeof(log_data), PSTR("%s %02X"), log_data, buffer[address +i]);
@@ -361,7 +429,7 @@ void DebugCfgPeek(char* parms)
     snprintf_P(log_data, sizeof(log_data), PSTR("%s%c"), log_data, ((buffer[address +i] > 0x20) && (buffer[address +i] < 0x7F)) ? (char)buffer[address +i] : ' ');
   }
   snprintf_P(log_data, sizeof(log_data), PSTR("%s| 0x%02X (%d), 0x%04X (%d), 0x%0LX (%lu)"), log_data, data8, data8, data16, data16, data32, data32);
-  AddLog(LOG_LEVEL_INFO);
+  AddLogData(LOG_LEVEL_INFO, log_data);
 }
 
 void DebugCfgPoke(char* parms)
@@ -369,7 +437,7 @@ void DebugCfgPoke(char* parms)
   char *p;
 
   uint16_t address = strtol(parms, &p, 16);
-  if (address > sizeof(SYSCFG)) address = sizeof(SYSCFG) -4;
+  if (address > sizeof(Settings)) address = sizeof(Settings) -4;
   address = (address >> 2) << 2;
 
   uint32_t data = strtol(p, &p, 16);
@@ -382,41 +450,12 @@ void DebugCfgPoke(char* parms)
 
   uint32_t ndata32 = (buffer[address +3] << 24) + (buffer[address +2] << 16) + (buffer[address +1] << 8) + buffer[address];
 
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: 0x%0LX (%lu) poked to 0x%0LX (%lu)"), address, data32, data32, ndata32, ndata32);
+  AddLog(LOG_LEVEL_INFO, PSTR("%03X: 0x%0LX (%lu) poked to 0x%0LX (%lu)"), address, data32, data32, ndata32, ndata32);
 }
-
-#ifdef USE_DEBUG_SETTING_NAMES
-void DebugCfgShow(uint8_t more)
-{
-  uint8_t *SetAddr;
-  SetAddr = (uint8_t *)&Settings;
-
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: Hostname (%d)         [%s]"), (uint8_t *)&Settings.hostname - SetAddr, sizeof(Settings.hostname)-1, Settings.hostname);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: SSids (%d)            [%s], [%s]"), (uint8_t *)&Settings.sta_ssid - SetAddr, sizeof(Settings.sta_ssid[0])-1, Settings.sta_ssid[0], Settings.sta_ssid[1]);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: Friendlynames (%d)    [%s], [%s], [%s], [%s]"), (uint8_t *)&Settings.friendlyname - SetAddr, sizeof(Settings.friendlyname[0])-1, Settings.friendlyname[0], Settings.friendlyname[1], Settings.friendlyname[2], Settings.friendlyname[3]);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: OTA Url (%d)          [%s]"), (uint8_t *)&Settings.ota_url - SetAddr, sizeof(Settings.ota_url)-1, Settings.ota_url);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: StateText (%d)        [%s], [%s], [%s], [%s]"), (uint8_t *)&Settings.state_text - SetAddr, sizeof(Settings.state_text[0])-1, Settings.state_text[0], Settings.state_text[1], Settings.state_text[2], Settings.state_text[3]);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: Syslog Host (%d)      [%s]"), (uint8_t *)&Settings.syslog_host - SetAddr, sizeof(Settings.syslog_host)-1, Settings.syslog_host);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: NTP Servers (%d)      [%s], [%s], [%s]"), (uint8_t *)&Settings.ntp_server - SetAddr, sizeof(Settings.ntp_server[0])-1, Settings.ntp_server[0], Settings.ntp_server[1], Settings.ntp_server[2]);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT Host (%d)        [%s]"), (uint8_t *)&Settings.mqtt_host - SetAddr, sizeof(Settings.mqtt_host)-1, Settings.mqtt_host);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT Client (%d)      [%s]"), (uint8_t *)&Settings.mqtt_client - SetAddr, sizeof(Settings.mqtt_client)-1, Settings.mqtt_client);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT User (%d)        [%s]"), (uint8_t *)&Settings.mqtt_user - SetAddr, sizeof(Settings.mqtt_user)-1, Settings.mqtt_user);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT FullTopic (%d)   [%s]"), (uint8_t *)&Settings.mqtt_fulltopic - SetAddr, sizeof(Settings.mqtt_fulltopic)-1, Settings.mqtt_fulltopic);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT Topic (%d)       [%s]"), (uint8_t *)&Settings.mqtt_topic - SetAddr, sizeof(Settings.mqtt_topic)-1, Settings.mqtt_topic);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT GroupTopic (%d)  [%s]"), (uint8_t *)&Settings.mqtt_grptopic - SetAddr, sizeof(Settings.mqtt_grptopic)-1, Settings.mqtt_grptopic);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT ButtonTopic (%d) [%s]"), (uint8_t *)&Settings.button_topic - SetAddr, sizeof(Settings.button_topic)-1, Settings.button_topic);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT SwitchTopic (%d) [%s]"), (uint8_t *)&Settings.switch_topic - SetAddr, sizeof(Settings.switch_topic)-1, Settings.switch_topic);
-  AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT Prefixes (%d)    [%s], [%s], [%s]"), (uint8_t *)&Settings.mqtt_prefix - SetAddr, sizeof(Settings.mqtt_prefix[0])-1, Settings.mqtt_prefix[0], Settings.mqtt_prefix[1], Settings.mqtt_prefix[2]);
-  if (17 == more) {
-    AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: AP Passwords (%d)     [%s], [%s]"), (uint8_t *)&Settings.sta_pwd - SetAddr, sizeof(Settings.sta_pwd[0])-1, Settings.sta_pwd[0], Settings.sta_pwd[1]);
-    AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: MQTT Password (%d)    [%s]"), (uint8_t *)&Settings.mqtt_pwd - SetAddr, sizeof(Settings.mqtt_pwd)-1, Settings.mqtt_pwd);
-    AddLog_P2(LOG_LEVEL_INFO, PSTR("%03X: Web Password (%d)     [%s]"), (uint8_t *)&Settings.web_password - SetAddr, sizeof(Settings.web_password)-1, Settings.web_password);
-  }
-}
-#endif  // USE_DEBUG_SETTING_NAMES
 
 void SetFlashMode(uint8_t mode)
 {
+#ifdef ESP8266
   uint8_t *_buffer;
   uint32_t address;
 
@@ -432,6 +471,7 @@ void SetFlashMode(uint8_t mode)
     }
   }
   delete[] _buffer;
+#endif  // ESP8266
 }
 
 /*********************************************************************************************\
@@ -440,7 +480,7 @@ void SetFlashMode(uint8_t mode)
 
 void CmndHelp(void)
 {
-  AddLog_P(LOG_LEVEL_INFO, PSTR("HLP: "), kDebugCommands);
+  AddLog_P(LOG_LEVEL_INFO, PSTR("HLP: %s"), kDebugCommands);
   ResponseCmndDone();
 }
 
@@ -468,21 +508,15 @@ void CmndCfgPoke(void)
   ResponseCmndDone();
 }
 
-#ifdef USE_DEBUG_SETTING_NAMES
-void CmndCfgShow(void)
-{
-  DebugCfgShow(XdrvMailbox.payload);
-  ResponseCmndDone();
-}
-#endif  // USE_DEBUG_SETTING_NAMES
-
 #ifdef USE_WEBSERVER
 void CmndCfgXor(void)
 {
   if (XdrvMailbox.data_len > 0) {
     Web.config_xor_on_set = XdrvMailbox.payload;
   }
-  ResponseCmndNumber(Web.config_xor_on_set);
+  char temp[10];
+  snprintf_P(temp, sizeof(temp), PSTR("0x%02X"), Web.config_xor_on_set);
+  ResponseCmndChar(temp);
 }
 #endif  // USE_WEBSERVER
 
@@ -503,6 +537,19 @@ void CmndCpuCheck(void)
   ResponseCmndNumber(CPU_load_check);
 }
 
+void CmndSerBufSize(void)
+{
+  if (XdrvMailbox.data_len > 0) {
+    Serial.setRxBufferSize(XdrvMailbox.payload);
+  }
+#ifdef ESP8266
+  ResponseCmndNumber(Serial.getRxBufferSize());
+#endif  // ESP8266
+#ifdef ESP32
+  ResponseCmndDone();
+#endif  // ESP32
+}
+
 void CmndFreemem(void)
 {
   if (XdrvMailbox.data_len > 0) {
@@ -517,7 +564,7 @@ void CmndSetSensor(void)
     if (XdrvMailbox.payload >= 0) {
       bitWrite(Settings.sensors[XdrvMailbox.index / 32], XdrvMailbox.index % 32, XdrvMailbox.payload &1);
       if (1 == XdrvMailbox.payload) {
-        restart_flag = 2;  // To safely re-enable a sensor currently most sensor need to follow complete restart init cycle
+        TasmotaGlobal.restart_flag = 2;  // To safely re-enable a sensor currently most sensor need to follow complete restart init cycle
       }
     }
     Response_P(PSTR("{\"" D_CMND_SETSENSOR "\":"));
@@ -543,12 +590,13 @@ uint32_t DebugSwap32(uint32_t x) {
 
 void CmndFlashDump(void)
 {
+#ifdef ESP8266
   // FlashDump
   // FlashDump 0xFF000
   // FlashDump 0xFC000 10
   const uint32_t flash_start = 0x40200000;  // Start address flash
   const uint8_t bytes_per_cols = 0x20;
-  const uint32_t max = (SPIFFS_END + 5) * SPI_FLASH_SEC_SIZE;  // 0x100000 for 1M flash, 0x400000 for 4M flash
+  const uint32_t max = (EEPROM_LOCATION + 5) * SPI_FLASH_SEC_SIZE;  // 0x100000 for 1M flash, 0x400000 for 4M flash
 
   uint32_t start = flash_start;
   uint32_t rows = 8;
@@ -568,17 +616,19 @@ void CmndFlashDump(void)
 
   for (uint32_t pos = start; pos < end; pos += bytes_per_cols) {
     uint32_t* values = (uint32_t*)(pos);
-    AddLog_P2(LOG_LEVEL_INFO, PSTR("%06X:  %08X %08X %08X %08X  %08X %08X %08X %08X"), pos - flash_start,
+    AddLog(LOG_LEVEL_INFO, PSTR("%06X:  %08X %08X %08X %08X  %08X %08X %08X %08X"), pos - flash_start,
       DebugSwap32(values[0]), DebugSwap32(values[1]), DebugSwap32(values[2]), DebugSwap32(values[3]),
       DebugSwap32(values[4]), DebugSwap32(values[5]), DebugSwap32(values[6]), DebugSwap32(values[7]));
   }
   ResponseCmndDone();
+#endif  // ESP8266
 }
 
+#ifdef USE_I2C
 void CmndI2cWrite(void)
 {
   // I2cWrite <address>,<data>..
-  if (i2c_flg) {
+  if (TasmotaGlobal.i2c_enabled) {
     char* parms = XdrvMailbox.data;
     uint8_t buffer[100];
     uint32_t index = 0;
@@ -598,7 +648,7 @@ void CmndI2cWrite(void)
         Wire.write(buffer[i]);
       }
       int result = Wire.endTransmission();
-      AddLog_P2(LOG_LEVEL_INFO, PSTR("I2C: Result %d"), result);
+      AddLog(LOG_LEVEL_INFO, PSTR("I2C: Result %d"), result);
     }
   }
   ResponseCmndDone();
@@ -607,7 +657,7 @@ void CmndI2cWrite(void)
 void CmndI2cRead(void)
 {
   // I2cRead <address>,<size>
-  if (i2c_flg) {
+  if (TasmotaGlobal.i2c_enabled) {
     char* parms = XdrvMailbox.data;
     uint8_t buffer[100];
     uint32_t index = 0;
@@ -639,19 +689,22 @@ void CmndI2cRead(void)
 
 void CmndI2cStretch(void)
 {
-  if (i2c_flg && (XdrvMailbox.payload > 0)) {
+#ifdef ESP8266
+  if (TasmotaGlobal.i2c_enabled && (XdrvMailbox.payload > 0)) {
     Wire.setClockStretchLimit(XdrvMailbox.payload);
   }
   ResponseCmndDone();
+#endif  // ESP8266
 }
 
 void CmndI2cClock(void)
 {
-  if (i2c_flg && (XdrvMailbox.payload > 0)) {
+  if (TasmotaGlobal.i2c_enabled && (XdrvMailbox.payload > 0)) {
     Wire.setClock(XdrvMailbox.payload);
   }
   ResponseCmndDone();
 }
+#endif // USE_I2C
 
 /*********************************************************************************************\
  * Interface

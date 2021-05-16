@@ -1,7 +1,7 @@
 /*
   xdsp_03_matrix.ino - Display 8x8 matrix support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Adafruit
+  Copyright (C) 2021  Theo Arends and Adafruit
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
 #ifdef USE_DISPLAY_MATRIX
 
 #define XDSP_03                    3
+#define XI2C_05                    5  // See I2CDEVICES.md
 
 #define MTX_MAX_SCREEN_BUFFER      80
 
@@ -94,7 +95,7 @@ void MatrixScrollLeft(char* txt, int loop)
     // Horiz. position of text -- starts off right edge
     mtx_x = 8 * mtx_matrices;
 
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), txt);
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), txt);
 
     disp_refresh = Settings.display_refresh;
   case 2:
@@ -193,12 +194,13 @@ void MatrixInit(uint8_t mode)
   }
 }
 
-void MatrixInitDriver(void)
-{
+void MatrixInitDriver(void) {
+  if (!TasmotaGlobal.i2c_enabled) { return; }
+
   mtx_buffer = (char*)(malloc(MTX_MAX_SCREEN_BUFFER));
   if (mtx_buffer != nullptr) {
     if (!Settings.display_model) {
-      if (I2cDevice(Settings.display_address[1])) {
+      if (I2cSetDevice(Settings.display_address[1])) {
         Settings.display_model = XDSP_03;
       }
     }
@@ -207,6 +209,7 @@ void MatrixInitDriver(void)
       mtx_state = 1;
       for (mtx_matrices = 0; mtx_matrices < 8; mtx_matrices++) {
         if (Settings.display_address[mtx_matrices]) {
+          I2cSetActiveFound(Settings.display_address[mtx_matrices], "8x8Matrix");
           matrix[mtx_matrices] = new Adafruit_8x8matrix();
           matrix[mtx_matrices]->begin(Settings.display_address[mtx_matrices]);
         } else {
@@ -218,6 +221,8 @@ void MatrixInitDriver(void)
       Settings.display_height = 8;
 
       MatrixInitMode();
+
+      AddLog(LOG_LEVEL_INFO, PSTR("DSP: 8x8Matrix"));
     }
   }
 }
@@ -263,7 +268,7 @@ void MatrixPrintLog(uint8_t direction)
         i++;
       }
 
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "[%s]"), mtx_buffer);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "[%s]"), mtx_buffer);
 
       mtx_done = 1;
     }
@@ -330,30 +335,30 @@ void MatrixRefresh(void)  // Every second
 
 bool Xdsp03(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_05)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      MatrixInitDriver();
-    }
-    else if (XDSP_03 == Settings.display_model) {
-      switch (function) {
-        case FUNC_DISPLAY_MODEL:
-          result = true;
-          break;
-        case FUNC_DISPLAY_INIT:
-          MatrixInit(dsp_init);
-          break;
-        case FUNC_DISPLAY_EVERY_50_MSECOND:
-          MatrixRefresh();
-          break;
-        case FUNC_DISPLAY_POWER:
-          MatrixOnOff();
-          break;
-        case FUNC_DISPLAY_DRAW_STRING:
-          MatrixDrawStringAt(dsp_x, dsp_y, dsp_str, dsp_color, dsp_flag);
-          break;
-      }
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    MatrixInitDriver();
+  }
+  else if (XDSP_03 == Settings.display_model) {
+    switch (function) {
+      case FUNC_DISPLAY_MODEL:
+        result = true;
+        break;
+      case FUNC_DISPLAY_INIT:
+        MatrixInit(dsp_init);
+        break;
+      case FUNC_DISPLAY_EVERY_50_MSECOND:
+        MatrixRefresh();
+        break;
+      case FUNC_DISPLAY_POWER:
+        MatrixOnOff();
+        break;
+      case FUNC_DISPLAY_DRAW_STRING:
+        MatrixDrawStringAt(dsp_x, dsp_y, dsp_str, dsp_color, dsp_flag);
+        break;
     }
   }
   return result;

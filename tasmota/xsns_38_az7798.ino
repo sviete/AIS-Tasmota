@@ -1,7 +1,7 @@
 /*
   xsns_38_az7798.ino - AZ_Instrument 7798 CO2/temperature/humidity meter support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -166,14 +166,14 @@ void AzEverySecond(void)
     AddLogBuffer(LOG_LEVEL_DEBUG_MORE, az_response, counter);
 
     if (!az_received) {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 comms timeout"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 comms timeout"));
       return;
     }
 
     i = 0;
     while((az_response[i] != 'T') && (i < counter)) {i++;} // find the start of response
     if(az_response[i] != 'T') {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find start of response"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find start of response"));
       return;
     }
     i++;                                    // advance to start of temperature value
@@ -183,7 +183,7 @@ void AzEverySecond(void)
       response_substr[j++] = az_response[i++];
     }
     if((az_response[i] != 'C') && (az_response[i] != 'F')){
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find end of temperature"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find end of temperature"));
       return;
     }
     response_substr[j] = 0;                 // add null terminator
@@ -195,12 +195,12 @@ void AzEverySecond(void)
     }
     i++;                                    // advance to first delimiter
     if(az_response[i] != ':') {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error first delimiter"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error first delimiter"));
       return;
     }
     i++;                                    // advance to start of CO2
     if(az_response[i] != 'C') {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error start of CO2"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error start of CO2"));
       return;
     }
     i++;                                    // advance to start of CO2 value
@@ -210,20 +210,22 @@ void AzEverySecond(void)
       response_substr[j++] = az_response[i++];
     }
     if(az_response[i] != 'p') {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find end of CO2"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find end of CO2"));
       return;
     }
     response_substr[j] = 0;                 // add null terminator
     az_co2 = atoi((char*)response_substr);
+#ifdef USE_LIGHT
     LightSetSignal(CO2_LOW, CO2_HIGH, az_co2);
+#endif  // USE_LIGHT
     i += 3;                                 // advance to second delimiter
     if(az_response[i] != ':') {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error second delimiter"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error second delimiter"));
       return;
     }
     i++;                                    // advance to start of humidity
     if(az_response[i] != 'H') {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error start of humidity"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 error start of humidity"));
       return;
     }
     i++;                                    // advance to start of humidity value
@@ -233,7 +235,7 @@ void AzEverySecond(void)
       response_substr[j++] = az_response[i++];
     }
     if(az_response[i] != '%') {
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find end of humidity"));
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 failed to find end of humidity"));
       return;
     }
     response_substr[j] = 0;                 // add null terminator
@@ -254,7 +256,7 @@ void AzEverySecond(void)
       }
     } while(((millis() - start) < AZ_READ_TIMEOUT));
     az_clock_update = AZ_CLOCK_UPDATE_INTERVAL;
-    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 clock updated"));
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 clock updated"));
   } else {
     az_clock_update--;
   }
@@ -265,8 +267,8 @@ void AzEverySecond(void)
 void AzInit(void)
 {
   az_type = 0;
-  if ((pin[GPIO_AZ_RXD] < 99) && (pin[GPIO_AZ_TXD] < 99)) {
-    AzSerial = new TasmotaSerial(pin[GPIO_AZ_RXD], pin[GPIO_AZ_TXD], 1);
+  if (PinUsed(GPIO_AZ_RXD) && PinUsed(GPIO_AZ_TXD)) {
+    AzSerial = new TasmotaSerial(Pin(GPIO_AZ_RXD), Pin(GPIO_AZ_TXD), 1);
     if (AzSerial->begin(9600)) {
       if (AzSerial->hardwareSerial()) { ClaimSerial(); }
       az_type = 1;
@@ -276,21 +278,17 @@ void AzInit(void)
 
 void AzShow(bool json)
 {
-  char temperature[33];
-  dtostrfd(az_temperature, Settings.flag2.temperature_resolution, temperature);
-  char humidity[33];
-  dtostrfd(az_humidity, Settings.flag2.humidity_resolution, humidity);
-
   if (json) {
-    ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_CO2 "\":%d,\"" D_JSON_TEMPERATURE "\":%s,\"" D_JSON_HUMIDITY "\":%s}"), ktype, az_co2, temperature, humidity);
+    ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_CO2 "\":%d,"), ktype, az_co2);
+    ResponseAppendTHD(az_temperature, az_humidity);
+    ResponseJsonEnd();
 #ifdef USE_DOMOTICZ
-    if (0 == tele_period) DomoticzSensor(DZ_AIRQUALITY, az_co2);
+    if (0 == TasmotaGlobal.tele_period) DomoticzSensor(DZ_AIRQUALITY, az_co2);
 #endif  // USE_DOMOTICZ
 #ifdef USE_WEBSERVER
   } else {
     WSContentSend_PD(HTTP_SNS_CO2, ktype, az_co2);
-    WSContentSend_PD(HTTP_SNS_TEMP, ktype, temperature, TempUnit());
-    WSContentSend_PD(HTTP_SNS_HUM, ktype, humidity);
+    WSContentSend_THD(ktype, az_temperature, az_humidity);
 #endif  // USE_WEBSERVER
   }
 }

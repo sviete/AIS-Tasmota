@@ -1,7 +1,7 @@
 /*
   xnrg_interface.ino - Energy driver interface support for Tasmota
 
-  Copyright (C) 2019  Theo Arends inspired by ESPEasy
+  Copyright (C) 2021  Theo Arends inspired by ESPEasy
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -86,7 +86,71 @@ bool (* const xnrg_func_ptr[])(uint8_t) = {   // Energy driver Function Pointers
 #endif
 
 #ifdef XNRG_16
-  &Xnrg16
+  &Xnrg16,
+#endif
+
+#ifdef XNRG_17
+  &Xnrg17,
+#endif
+
+#ifdef XNRG_18
+  &Xnrg18,
+#endif
+
+#ifdef XNRG_19
+  &Xnrg19,
+#endif
+
+#ifdef XNRG_20
+  &Xnrg20,
+#endif
+
+#ifdef XNRG_21
+  &Xnrg21,
+#endif
+
+#ifdef XNRG_22
+  &Xnrg22,
+#endif
+
+#ifdef XNRG_23
+  &Xnrg23,
+#endif
+
+#ifdef XNRG_24
+  &Xnrg24,
+#endif
+
+#ifdef XNRG_25
+  &Xnrg25,
+#endif
+
+#ifdef XNRG_26
+  &Xnrg26,
+#endif
+
+#ifdef XNRG_27
+  &Xnrg27,
+#endif
+
+#ifdef XNRG_28
+  &Xnrg28,
+#endif
+
+#ifdef XNRG_29
+  &Xnrg29,
+#endif
+
+#ifdef XNRG_30
+  &Xnrg30,
+#endif
+
+#ifdef XNRG_31  // Reserved for use by xdrv_45_shelly_dimmer.ino
+  &Xnrg31,
+#endif
+
+#ifdef XNRG_32  // Reserved for use by xdrv_16_tuyamcu.ino
+  &Xnrg32
 #endif
 };
 
@@ -96,16 +160,18 @@ uint8_t xnrg_active = 0;
 
 bool XnrgCall(uint8_t function)
 {
+  DEBUG_TRACE_LOG(PSTR("NRG: %d"), function);
+
   if (FUNC_PRE_INIT == function) {
     for (uint32_t x = 0; x < xnrg_present; x++) {
       xnrg_func_ptr[x](function);
-      if (energy_flg) {
+      if (TasmotaGlobal.energy_driver) {
         xnrg_active = x;
         return true;  // Stop further driver investigation
       }
     }
   }
-  else if (energy_flg) {
+  else if (TasmotaGlobal.energy_driver) {
     return xnrg_func_ptr[xnrg_active](function);
   }
   return false;
