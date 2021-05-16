@@ -1,7 +1,7 @@
 /*
   xdsp_02_ssd1306.ino - Display Oled SSD1306 support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Adafruit
+  Copyright (C) 2021  Theo Arends and Adafruit
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
 #ifdef USE_DISPLAY_SSD1306
 
 #define XDSP_02                2
+#define XI2C_04                4            // See I2CDEVICES.md
 
 #define OLED_RESET 4
 
@@ -46,42 +47,34 @@ extern uint8_t *buffer;
 
 /*********************************************************************************************/
 
-void SSD1306InitDriver()
-{
+void SSD1306InitDriver(void) {
+  if (!TasmotaGlobal.i2c_enabled) { return; }
+
   if (!Settings.display_model) {
-    if (I2cDevice(OLED_ADDRESS1)) {
+    if (I2cSetDevice(OLED_ADDRESS1)) {
       Settings.display_address[0] = OLED_ADDRESS1;
       Settings.display_model = XDSP_02;
     }
-    else if (I2cDevice(OLED_ADDRESS2)) {
+    else if (I2cSetDevice(OLED_ADDRESS2)) {
       Settings.display_address[0] = OLED_ADDRESS2;
       Settings.display_model = XDSP_02;
     }
   }
 
   if (XDSP_02 == Settings.display_model) {
+    I2cSetActiveFound(Settings.display_address[0], "SSD1306");
 
-    if ((Settings.display_width != 96) && (Settings.display_width != 128)) {
+    if ((Settings.display_width != 64) && (Settings.display_width != 96) && (Settings.display_width != 128)) {
       Settings.display_width = 128;
     }
-    if ((Settings.display_height != 16) && (Settings.display_height != 32) && (Settings.display_height != 64)) {
+    if ((Settings.display_height != 16) && (Settings.display_height != 32) && (Settings.display_height != 48) && (Settings.display_height != 64)) {
       Settings.display_height = 64;
     }
 
-    uint8_t reset_pin = -1;
-    if (pin[GPIO_OLED_RESET] < 99) {
-      reset_pin = pin[GPIO_OLED_RESET];
-    }
-
-    // allocate screen buffer
-    if (buffer) { free(buffer); }
-    buffer = (unsigned char*)calloc((Settings.display_width * Settings.display_height) / 8,1);
-    if (!buffer) { return; }
-
     // init renderer
     // oled1306 = new Adafruit_SSD1306(SSD1306_LCDWIDTH,SSD1306_LCDHEIGHT);
-    oled1306 = new Adafruit_SSD1306(Settings.display_width, Settings.display_height, &Wire, reset_pin);
-    oled1306->begin(SSD1306_SWITCHCAPVCC, Settings.display_address[0], 0);
+    oled1306 = new Adafruit_SSD1306(Settings.display_width, Settings.display_height, &Wire, Pin(GPIO_OLED_RESET));
+    oled1306->begin(SSD1306_SWITCHCAPVCC, Settings.display_address[0], Pin(GPIO_OLED_RESET) >= 0);
     renderer = oled1306;
     renderer->DisplayInit(DISPLAY_INIT_MODE, Settings.display_size, Settings.display_rotate, Settings.display_font);
     renderer->setTextColor(1,0);
@@ -95,6 +88,7 @@ void SSD1306InitDriver()
     renderer->DisplayOnff(1);
 #endif
 
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: SSD1306"));
   }
 }
 
@@ -122,8 +116,7 @@ void Ssd1306PrintLog(void)
       strlcpy(disp_screen_buffer[last_row], txt, disp_screen_buffer_cols);
       DisplayFillScreen(last_row);
 
-      snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
-      AddLog(LOG_LEVEL_DEBUG);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
 
       renderer->println(disp_screen_buffer[last_row]);
       renderer->Updateframe();
@@ -141,6 +134,7 @@ void Ssd1306Time(void)
   renderer->setCursor(0, 0);
   snprintf_P(line, sizeof(line), PSTR(" %02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);  // [ 12:34:56 ]
   renderer->println(line);
+  renderer->println();
   snprintf_P(line, sizeof(line), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);   // [01-02-2018]
   renderer->println(line);
   renderer->Updateframe();
@@ -173,23 +167,23 @@ void Ssd1306Refresh(void)  // Every second
 
 bool Xdsp02(byte function)
 {
+  if (!I2cEnabled(XI2C_04)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      SSD1306InitDriver();
-    }
-    else if (XDSP_02 == Settings.display_model) {
-      switch (function) {
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    SSD1306InitDriver();
+  }
+  else if (XDSP_02 == Settings.display_model) {
+    switch (function) {
 #ifdef USE_DISPLAY_MODES1TO5
-        case FUNC_DISPLAY_EVERY_SECOND:
-          Ssd1306Refresh();
-          break;
+      case FUNC_DISPLAY_EVERY_SECOND:
+        Ssd1306Refresh();
+        break;
 #endif  // USE_DISPLAY_MODES1TO5
-        case FUNC_DISPLAY_MODEL:
-          result = true;
-          break;
-      }
+      case FUNC_DISPLAY_MODEL:
+        result = true;
+        break;
     }
   }
   return result;

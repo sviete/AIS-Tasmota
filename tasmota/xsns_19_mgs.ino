@@ -1,7 +1,7 @@
 /*
   xsns_19_mgs.ino - Xadow and Grove Mutichannel Gas sensor support for Tasmota
 
-  Copyright (C) 2019  Palich2000 and Theo Arends
+  Copyright (C) 2021  Palich2000 and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 \*********************************************************************************************/
 
 #define XSNS_19            19
+#define XI2C_17            17  // See I2CDEVICES.md
 
 #ifndef MGS_SENSOR_ADDR
 #define MGS_SENSOR_ADDR    0x04             // Default Mutichannel Gas sensor i2c address
@@ -34,18 +35,20 @@
 
 #include "MutichannelGasSensor.h"
 
+bool mgs_detected = false;
+
 void MGSInit(void) {
   gas.begin(MGS_SENSOR_ADDR);
 }
 
-bool MGSPrepare(void)
+void MGSPrepare(void)
 {
+  if (I2cActive(MGS_SENSOR_ADDR)) { return; }
+
   gas.begin(MGS_SENSOR_ADDR);
   if (!gas.isError()) {
-    AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, "MultiGasSensor", MGS_SENSOR_ADDR);
-    return true;
-  } else {
-    return false;
+    I2cSetActiveFound(MGS_SENSOR_ADDR, "MultiGas");
+    mgs_detected = true;
   }
 }
 
@@ -92,25 +95,23 @@ void MGSShow(bool json)
 
 bool Xsns19(uint8_t function)
 {
-  bool result = false;
-  static int detected = false;
+  if (!I2cEnabled(XI2C_17)) { return false; }
 
-  if (i2c_flg) {
+  bool result = false;
+
+  if (FUNC_INIT == function) {
+    MGSPrepare();
+  }
+  else if (mgs_detected) {
     switch (function) {
-      case FUNC_INIT:
-//        MGSInit();
-        break;
-      case FUNC_PREP_BEFORE_TELEPERIOD:
-        detected = MGSPrepare();
-        break;
       case FUNC_JSON_APPEND:
-        if (detected) MGSShow(1);
+        MGSShow(1);
         break;
-#ifdef USE_WEBSERVER
+  #ifdef USE_WEBSERVER
       case FUNC_WEB_SENSOR:
-        if (detected) MGSShow(0);
+        MGSShow(0);
         break;
-#endif  // USE_WEBSERVER
+  #endif  // USE_WEBSERVER
     }
   }
   return result;

@@ -1,7 +1,7 @@
 /*
   xlgt_interface.ino - Light driver interface support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -96,16 +96,18 @@ uint8_t xlgt_active = 0;
 
 bool XlgtCall(uint8_t function)
 {
+  DEBUG_TRACE_LOG(PSTR("LGT: %d"), function);
+
   if (FUNC_MODULE_INIT == function) {
     for (uint32_t x = 0; x < xlgt_present; x++) {
       xlgt_func_ptr[x](function);
-      if (light_flg) {
+      if (TasmotaGlobal.light_driver) {
         xlgt_active = x;
         return true;  // Stop further driver investigation
       }
     }
   }
-  else if (light_flg) {
+  else if (TasmotaGlobal.light_driver) {
     return xlgt_func_ptr[xlgt_active](function);
   }
   return false;

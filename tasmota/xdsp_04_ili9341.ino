@@ -1,7 +1,7 @@
 /*
-  xdsp_04_ili9341.ino - Display Tft Ili9341 support for Tasmota
+  xdsp_04_ILI9341.ino - Display ILI9341/2 support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Adafruit
+  Copyright (C) 2021  Gerhard Mutz and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -23,128 +23,258 @@
 
 #define XDSP_04                4
 
-#define TFT_TOP                16
-#define TFT_BOTTOM             16
-#define TFT_FONT_WIDTH         6
-#define TFT_FONT_HEIGTH        8     // Adafruit minimal font heigth pixels
+enum IliModes { ILIMODE_9341 = 1, ILIMODE_9342, ILIMODE_MAX };
 
-#include <SPI.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_ILI9341.h>        // TFT 320x240 and 480x320
+#include <ILI9341_2.h>
 
-Adafruit_ILI9341 *tft;
+extern uint8_t color_type;
+ILI9341_2 *ili9341_2;
 
-uint16_t tft_scroll;
+#if defined(USE_FT5206)
+#include <FT5206.h>
+uint8_t ili9342_ctouch_counter = 0;
+#elif defined(USE_XPT2046)
+#include <XPT2046_Touchscreen.h>
+uint8_t ili9342_ctouch_counter = 0;
+#endif // USE_FT5206
+
+bool tft_init_done = false;
+
+void Core2DisplayPower(uint8_t on);
+void Core2DisplayDim(uint8_t dim);
+
+//Settings.display_options.type = ILIMODE_9341;
 
 /*********************************************************************************************/
 
-void Ili9341InitMode(void)
+void ILI9341_InitDriver()
 {
-  tft->setRotation(Settings.display_rotate);  // 0
-  tft->invertDisplay(0);
-  tft->fillScreen(ILI9341_BLACK);
-  tft->setTextWrap(false);         // Allow text to run off edges
-  tft->cp437(true);
-  if (!Settings.display_mode) {
-    tft->setCursor(0, 0);
-    tft->setTextColor(ILI9341_WHITE, ILI9341_BLACK);
-    tft->setTextSize(1);
-  } else {
-    tft->setScrollMargins(TFT_TOP, TFT_BOTTOM);
-    tft->setCursor(0, 0);
-    tft->setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
-    tft->setTextSize(2);
-//    tft->println("HEADER");
 
-    tft_scroll = TFT_TOP;
-  }
-}
+  // There are displays without CS
+  if (PinUsed(GPIO_ILI9341_CS) || PinUsed(GPIO_ILI9341_DC) &&
+      (TasmotaGlobal.spi_enabled || TasmotaGlobal.soft_spi_enabled)) {
 
-void Ili9341Init(uint8_t mode)
-{
-  switch(mode) {
-    case DISPLAY_INIT_MODE:
-      Ili9341InitMode();
-#ifdef USE_DISPLAY_MODES1TO5
-      if (Settings.display_rotate) {
-        DisplayClearScreenBuffer();
-      }
-#endif  // USE_DISPLAY_MODES1TO5
-      break;
-    case DISPLAY_INIT_PARTIAL:
-    case DISPLAY_INIT_FULL:
-      break;
-  }
-}
-
-void Ili9341InitDriver(void)
-{
-  if (!Settings.display_model) {
     Settings.display_model = XDSP_04;
-  }
 
-  if (XDSP_04 == Settings.display_model) {
     if (Settings.display_width != ILI9341_TFTWIDTH) {
       Settings.display_width = ILI9341_TFTWIDTH;
     }
     if (Settings.display_height != ILI9341_TFTHEIGHT) {
       Settings.display_height = ILI9341_TFTHEIGHT;
     }
-    tft = new Adafruit_ILI9341(pin[GPIO_SPI_CS], pin[GPIO_SPI_DC]);
-    tft->begin();
+
+    if (!Settings.display_options.type || (Settings.display_options.type >= ILIMODE_MAX)) {
+      Settings.display_options.type = ILIMODE_9341;
+    }
+
+    // default colors
+    fg_color = ILI9341_WHITE;
+    bg_color = ILI9341_BLACK;
+
+    // check for special case with 2 SPI busses (ESP32 bitcoin)
+    if (TasmotaGlobal.soft_spi_enabled) {
+      // Init renderer, may use hardware spi, however we use SSPI defintion because SD card uses SPI definition  (2 spi busses)
+      if (PinUsed(GPIO_SSPI_MOSI) && PinUsed(GPIO_SSPI_MISO) && PinUsed(GPIO_SSPI_SCLK)) {
+        ili9341_2 = new ILI9341_2(Pin(GPIO_ILI9341_CS), Pin(GPIO_SSPI_MOSI), Pin(GPIO_SSPI_MISO), Pin(GPIO_SSPI_SCLK), Pin(GPIO_OLED_RESET), Pin(GPIO_ILI9341_DC), Pin(GPIO_BACKLIGHT), 2, Settings.display_options.type & 3);
+      }
+    } else if (TasmotaGlobal.spi_enabled) {
+      if (PinUsed(GPIO_ILI9341_DC)) {
+        ili9341_2 = new ILI9341_2(Pin(GPIO_ILI9341_CS), Pin(GPIO_SPI_MOSI), Pin(GPIO_SPI_MISO), Pin(GPIO_SPI_CLK), Pin(GPIO_OLED_RESET), Pin(GPIO_ILI9341_DC), Pin(GPIO_BACKLIGHT), 1, Settings.display_options.type & 3);
+      }
+    }
+
+    if (ili9341_2 == nullptr) {
+      AddLog(LOG_LEVEL_INFO, PSTR("DSP: ILI934x invalid GPIOs"));
+      return;
+    }
+
+    ili9341_2->init(Settings.display_width, Settings.display_height);
+    renderer = ili9341_2;
+
+#ifdef USE_M5STACK_CORE2
+    renderer->SetPwrCB(Core2DisplayPower);
+    renderer->SetDimCB(Core2DisplayDim);
+#endif
+
+    renderer->DisplayInit(DISPLAY_INIT_MODE, Settings.display_size, Settings.display_rotate, Settings.display_font);
+    renderer->dim(Settings.display_dimmer);
+
+#ifdef SHOW_SPLASH
+    // Welcome text
+    renderer->setTextFont(2);
+    renderer->setTextSize(1);
+    renderer->setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    renderer->DrawStringAt(50, (Settings.display_height/2)-12, (Settings.display_options.type & 3)==ILIMODE_9341?"ILI9341 TFT!":"ILI9342 TFT!", ILI9341_WHITE, 0);
+    delay(1000);
+#endif // SHOW_SPLASH
+
+    color_type = COLOR_COLOR;
 
 #ifdef USE_DISPLAY_MODES1TO5
     if (Settings.display_rotate) {
       DisplayAllocScreenBuffer();
     }
+    Ili9341InitMode();
 #endif  // USE_DISPLAY_MODES1TO5
 
-    Ili9341InitMode();
+#ifdef ESP32
+#ifdef USE_FT5206
+    // start digitizer with fixed adress and pins for esp32
+    #undef SDA_2
+    #define SDA_2 21
+    #undef SCL_2
+    #define SCL_2 22
+    Wire1.begin(SDA_2, SCL_2, 400000);
+    FT5206_Touch_Init(Wire1);
+#endif // USE_FT5206
+#endif // ESP32
+
+#ifdef USE_XPT2046
+	  XPT2046_Touch_Init(Pin(GPIO_XPT2046_CS));
+#endif
+
+    tft_init_done = true;
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: ILI9341"));
   }
 }
 
-void Ili9341Clear(void)
-{
-  tft->fillScreen(ILI9341_BLACK);
-  tft->setCursor(0, 0);
-}
+#if defined(USE_FT5206) || defined(USE_XPT2046)
+#ifdef USE_TOUCH_BUTTONS
 
-void Ili9341DrawStringAt(uint16_t x, uint16_t y, char *str, uint16_t color, uint8_t flag)
-{
-  uint16_t active_color = ILI9341_WHITE;
+#ifdef USE_FT5206
+void FT5206_TS_RotConvert(int16_t *x, int16_t *y) {
 
-  tft->setTextSize(Settings.display_size);
-  if (!flag) {
-    tft->setCursor(x, y);
-  } else {
-    tft->setCursor((x-1) * TFT_FONT_WIDTH * Settings.display_size, (y-1) * TFT_FONT_HEIGTH * Settings.display_size);
+int16_t temp;
+  if (renderer) {
+    uint8_t rot = renderer->getRotation();
+    switch (rot) {
+      case 0:
+        break;
+      case 1:
+        temp = *y;
+        *y = renderer->height() - *x;
+        *x = temp;
+        break;
+      case 2:
+        *x = renderer->width() - *x;
+        *y = renderer->height() - *y;
+        break;
+      case 3:
+        temp = *y;
+        *y = *x;
+        *x = renderer->width() - temp;
+        break;
+    }
   }
-  if (color) { active_color = color; }
-  tft->setTextColor(active_color, ILI9341_BLACK);
-  tft->println(str);
 }
+#endif // USE_FT5206
 
-void Ili9341DisplayOnOff(uint8_t on)
-{
-//  tft->showDisplay(on);
-//  tft->invertDisplay(on);
-  if (pin[GPIO_BACKLIGHT] < 99) {
-    pinMode(pin[GPIO_BACKLIGHT], OUTPUT);
-    digitalWrite(pin[GPIO_BACKLIGHT], on);
+#ifdef USE_XPT2046
+void XPT2046_TS_RotConvert(int16_t *x, int16_t *y) {
+
+int16_t temp;
+  if (renderer) {
+    uint8_t rot = renderer->getRotation();
+//    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR(" TS: before convert x:%d / y:%d  screen r:%d / w:%d / h:%d"), *x, *y,rot,renderer->width(),renderer->height());
+	temp = map(*x,XPT2046_MINX,XPT2046_MAXX, renderer->height(), 0);
+	*x = map(*y,XPT2046_MINY,XPT2046_MAXY, renderer->width(), 0);
+	*y = temp;
+    switch (rot) {
+      case 0:
+        break;
+      case 1:
+        temp = *y;
+        *y = renderer->width() - *x;
+        *x = temp;
+        break;
+      case 2:
+        *x = renderer->width() - *x;
+        *y = renderer->height() - *y;
+        break;
+      case 3:
+        temp = *y;
+        *y = *x;
+        *x = renderer->height() - temp;
+        break;
+    }
+    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR(" TS: after convert x:%d / y:%d  screen r:%d / w:%d / h:%d"), *x, *y,rot,renderer->width(),renderer->height());
   }
 }
+#endif
 
-void Ili9341OnOff(void)
-{
-  Ili9341DisplayOnOff(disp_power);
+// check digitizer hit
+void ili9342_CheckTouch() {
+ili9342_ctouch_counter++;
+  if (2 == ili9342_ctouch_counter) {
+    // every 100 ms should be enough
+    ili9342_ctouch_counter = 0;
+#ifdef USE_FT5206
+    if (FT5206_found) {
+      Touch_Check(FT5206_TS_RotConvert);
+    }
+#endif // USE_FT5206
+#ifdef USE_XPT2046
+    if (XPT2046_found) {
+      Touch_Check(XPT2046_TS_RotConvert);
+    }
+#endif // USE_XPT2046
+  }
 }
+#endif // USE_TOUCH_BUTTONS
+#endif // USE_FT5206
 
-/*********************************************************************************************/
+
 
 #ifdef USE_DISPLAY_MODES1TO5
 
-void Ili9341PrintLog(void)
-{
+#define TFT_TOP                16
+#define TFT_BOTTOM             16
+#define TFT_FONT_WIDTH         6
+#define TFT_FONT_HEIGTH        8     // Adafruit minimal font heigth pixels
+
+uint16_t tft_top = TFT_TOP;
+uint16_t tft_bottom = TFT_BOTTOM;
+uint16_t tft_scroll = TFT_TOP;
+uint16_t tft_cols = 0;
+
+bool Ili9341Header(void) {
+  if (Settings.display_cols[0] != tft_cols) {
+    tft_cols = Settings.display_cols[0];
+    if (tft_cols > 17) {
+      tft_top = TFT_TOP;
+      tft_bottom = TFT_BOTTOM;
+    } else {
+      tft_top = 0;
+      tft_bottom = 0;
+    }
+    tft_scroll = tft_top;
+    renderer->setScrollMargins(tft_top, tft_bottom);
+  }
+  return (tft_cols > 17);
+}
+
+void Ili9341InitMode(void) {
+//  renderer->setRotation(Settings.display_rotate);  // 0
+#ifdef USE_DISPLAY_ILI9341
+//  renderer->invertDisplay(0);
+#endif
+  renderer->fillScreen(ILI9341_BLACK);
+  renderer->setTextWrap(false);         // Allow text to run off edges
+  renderer->cp437(true);
+  if (!Settings.display_mode) {
+    renderer->setCursor(0, 0);
+    renderer->setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    renderer->setTextSize(1);
+  } else {
+    Ili9341Header();
+    renderer->setCursor(0, 0);
+    renderer->setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
+    renderer->setTextSize(2);
+//    tft->println("HEADER");
+  }
+}
+
+void Ili9341PrintLog(void) {
   disp_refresh--;
   if (!disp_refresh) {
     disp_refresh = Settings.display_refresh;
@@ -157,58 +287,65 @@ void Ili9341PrintLog(void)
       uint8_t size = Settings.display_size;
       uint16_t theight = size * TFT_FONT_HEIGTH;
 
-      tft->setTextSize(size);
-      tft->setTextColor(ILI9341_CYAN, ILI9341_BLACK);  // Add background color to solve flicker
+      renderer->setTextSize(size);
+      renderer->setTextColor(ILI9341_CYAN, ILI9341_BLACK);  // Add background color to solve flicker
       if (!Settings.display_rotate) {  // Use hardware scroll
-        tft->setCursor(0, tft_scroll);
-        tft->fillRect(0, tft_scroll, tft->width(), theight, ILI9341_BLACK);  // Erase line
-        tft->print(txt);
+        renderer->setCursor(0, tft_scroll);
+        renderer->fillRect(0, tft_scroll, renderer->width(), theight, ILI9341_BLACK);  // Erase line
+        renderer->print(txt);
         tft_scroll += theight;
-        if (tft_scroll >= (tft->height() - TFT_BOTTOM)) {
-          tft_scroll = TFT_TOP;
+        if (tft_scroll >= (renderer->height() - tft_bottom)) {
+          tft_scroll = tft_top;
         }
-        tft->scrollTo(tft_scroll);
+        renderer->scrollTo(tft_scroll);
       } else {
         uint8_t last_row = Settings.display_rows -1;
 
-        tft_scroll = theight;  // Start below header
-        tft->setCursor(0, tft_scroll);
+        tft_scroll = (tft_top) ? theight : 0;  // Start below header
+        renderer->setCursor(0, tft_scroll);
         for (uint32_t i = 0; i < last_row; i++) {
           strlcpy(disp_screen_buffer[i], disp_screen_buffer[i +1], disp_screen_buffer_cols);
 //          tft->fillRect(0, tft_scroll, tft->width(), theight, ILI9341_BLACK);  // Erase line
-          tft->print(disp_screen_buffer[i]);
+          renderer->print(disp_screen_buffer[i]);
           tft_scroll += theight;
-          tft->setCursor(0, tft_scroll);
+          renderer->setCursor(0, tft_scroll);
           delay(1);  // Fix background runs heap usage due to long runtime of this loop (up to 1 second)
         }
         strlcpy(disp_screen_buffer[last_row], txt, disp_screen_buffer_cols);
         DisplayFillScreen(last_row);
-        tft->print(disp_screen_buffer[last_row]);
+        renderer->print(disp_screen_buffer[last_row]);
       }
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "[%s]"), txt);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "[%s]"), txt);
     }
   }
 }
 
-void Ili9341Refresh(void)  // Every second
-{
+void ILI9341_Refresh(void) {  // Every second
   if (Settings.display_mode) {  // Mode 0 is User text
-    char tftdt[Settings.display_cols[0] +1];
-    char date4[11];  // 24-04-2017
-    char space[Settings.display_cols[0] - 17];
-    char time[9];    // 13:45:43
+    // 24-04-2017 13:45:43 = 19 + 1 ('\0') = 20
+    // 24-04-2017 13:45 = 16 + 1 ('\0') = 17
 
-    tft->setTextSize(2);
-    tft->setTextColor(ILI9341_YELLOW, ILI9341_RED);   // Add background color to solve flicker
-    tft->setCursor(0, 0);
+    if (Ili9341Header()) {
+      char tftdt[Settings.display_cols[0] +1];
+      char date4[11];  // 24-04-2017
+      uint8_t time_size = (Settings.display_cols[0] >= 20) ? 9 : 6;  // 13:45:43 or 13:45
+      char spaces[Settings.display_cols[0] - (8 + time_size)];
+      char time[time_size];    // 13:45:43
 
-    snprintf_P(date4, sizeof(date4), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);
-    memset(space, 0x20, sizeof(space));
-    space[sizeof(space) -1] = '\0';
-    snprintf_P(time, sizeof(time), PSTR("%02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);
-    snprintf_P(tftdt, sizeof(tftdt), PSTR("%s%s%s"), date4, space, time);
+      renderer->setTextSize(Settings.display_size);
+      renderer->setTextColor(ILI9341_YELLOW, ILI9341_RED);   // Add background color to solve flicker
+      renderer->setCursor(0, 0);
 
-    tft->print(tftdt);
+      snprintf_P(date4, sizeof(date4), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);
+      memset(spaces, 0x20, sizeof(spaces));
+      spaces[sizeof(spaces) -1] = '\0';
+      snprintf_P(time, sizeof(time), PSTR("%02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);
+      snprintf_P(tftdt, sizeof(tftdt), PSTR("%s%s%s"), date4, spaces, time);
+
+      renderer->print(tftdt);
+    } else {
+      renderer->setCursor(0, 0);
+    }
 
     switch (Settings.display_mode) {
       case 1:  // Text
@@ -221,83 +358,49 @@ void Ili9341Refresh(void)  // Every second
     }
   }
 }
-
 #endif  // USE_DISPLAY_MODES1TO5
 
+/*********************************************************************************************/
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
-
 bool Xdsp04(uint8_t function)
 {
   bool result = false;
 
-  if (spi_flg) {
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      Ili9341InitDriver();
-    }
-    else if (XDSP_04 == Settings.display_model) {
-
-      if (!dsp_color) { dsp_color = ILI9341_WHITE; }
-
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    ILI9341_InitDriver();
+  }
+  else if (tft_init_done && (XDSP_04 == Settings.display_model)) {
       switch (function) {
         case FUNC_DISPLAY_MODEL:
           result = true;
           break;
-        case FUNC_DISPLAY_INIT:
-          Ili9341Init(dsp_init);
-          break;
-        case FUNC_DISPLAY_POWER:
-          Ili9341OnOff();
-          break;
-        case FUNC_DISPLAY_CLEAR:
-          Ili9341Clear();
-          break;
-        case FUNC_DISPLAY_DRAW_HLINE:
-          tft->writeFastHLine(dsp_x, dsp_y, dsp_len, dsp_color);
-          break;
-        case FUNC_DISPLAY_DRAW_VLINE:
-          tft->writeFastVLine(dsp_x, dsp_y, dsp_len, dsp_color);
-          break;
-        case FUNC_DISPLAY_DRAW_LINE:
-          tft->writeLine(dsp_x, dsp_y, dsp_x2, dsp_y2, dsp_color);
-          break;
-        case FUNC_DISPLAY_DRAW_CIRCLE:
-          tft->drawCircle(dsp_x, dsp_y, dsp_rad, dsp_color);
-          break;
-        case FUNC_DISPLAY_FILL_CIRCLE:
-          tft->fillCircle(dsp_x, dsp_y, dsp_rad, dsp_color);
-          break;
-        case FUNC_DISPLAY_DRAW_RECTANGLE:
-          tft->drawRect(dsp_x, dsp_y, dsp_x2, dsp_y2, dsp_color);
-          break;
-        case FUNC_DISPLAY_FILL_RECTANGLE:
-          tft->fillRect(dsp_x, dsp_y, dsp_x2, dsp_y2, dsp_color);
-          break;
-//        case FUNC_DISPLAY_DRAW_FRAME:
-//          oled->display();
-//          break;
         case FUNC_DISPLAY_TEXT_SIZE:
-          tft->setTextSize(Settings.display_size);
-          break;
         case FUNC_DISPLAY_FONT_SIZE:
-//          tft->setTextSize(Settings.display_font);
+        case DISPLAY_INIT_MODE:
+          renderer->clearDisplay();
           break;
-        case FUNC_DISPLAY_DRAW_STRING:
-          Ili9341DrawStringAt(dsp_x, dsp_y, dsp_str, dsp_color, dsp_flag);
+#if defined(USE_FT5206) || defined(USE_XPT2046)
+#ifdef USE_TOUCH_BUTTONS
+        case FUNC_DISPLAY_EVERY_50_MSECOND:
+#if defined(USE_FT5206)
+          if (FT5206_found) {
+#elif defined(USE_XPT2046)
+          if (XPT2046_found) {
+#endif
+
+            ili9342_CheckTouch();
+          }
           break;
-        case FUNC_DISPLAY_ONOFF:
-          Ili9341DisplayOnOff(dsp_on);
-          break;
-        case FUNC_DISPLAY_ROTATION:
-          tft->setRotation(Settings.display_rotate);
-          break;
+#endif // USE_TOUCH_BUTTONS
+#endif // USE_FT5206
 #ifdef USE_DISPLAY_MODES1TO5
         case FUNC_DISPLAY_EVERY_SECOND:
-          Ili9341Refresh();
+          ILI9341_Refresh();
           break;
 #endif  // USE_DISPLAY_MODES1TO5
-      }
+
     }
   }
   return result;

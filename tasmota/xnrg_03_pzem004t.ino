@@ -1,7 +1,7 @@
 /*
   xnrg_03_pzem004t.ino - PZEM004T energy sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@
 #define XNRG_03                  3
 
 const uint32_t PZEM_STABILIZE = 30;        // Number of seconds to stabilize configuration
+const uint32_t PZEM_RETRY = 5;             // Number of 250 ms retries
 
 #include <TasmotaSerial.h>
 
@@ -138,15 +139,15 @@ bool PzemRecieve(uint8_t resp, float *data)
   AddLogBuffer(LOG_LEVEL_DEBUG_MORE, buffer, len);
 
   if (len != sizeof(PZEMCommand)) {
-//    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "Pzem comms timeout"));
+//    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "Pzem comms timeout"));
     return false;
   }
   if (buffer[6] != PzemCrc(buffer)) {
-//    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "Pzem crc error"));
+//    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "Pzem crc error"));
     return false;
   }
   if (buffer[0] != resp) {
-//    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "Pzem bad response"));
+//    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "Pzem bad response"));
     return false;
   }
 
@@ -194,7 +195,7 @@ void PzemEvery250ms(void)
           Pzem.energy += value;
           if (Pzem.phase == Energy.phase_count -1) {
             if (Pzem.energy > Pzem.last_energy) {  // Handle missed phase
-              if (uptime > PZEM_STABILIZE) {
+              if (TasmotaGlobal.uptime > PZEM_STABILIZE) {
                 EnergyUpdateTotal(Pzem.energy, false);
               }
               Pzem.last_energy = Pzem.energy;
@@ -208,7 +209,7 @@ void PzemEvery250ms(void)
         Pzem.read_state = 1;
       }
 
-//      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("PZM: Retry %d"), 5 - Pzem.send_retry);
+//      AddLog(LOG_LEVEL_DEBUG, PSTR("PZM: Retry %d"), PZEM_RETRY - Pzem.send_retry);
     }
   }
 
@@ -220,20 +221,23 @@ void PzemEvery250ms(void)
         Pzem.phase--;
       }
 
-//      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("PZM: Probing address %d, Max phases %d"), Pzem.phase +1, Energy.phase_count);
+//      AddLog(LOG_LEVEL_DEBUG, PSTR("PZM: Probing address %d, Max phases %d"), Pzem.phase +1, Energy.phase_count);
     }
 
     if (Pzem.address) {
       Pzem.read_state = 0;  // Set address
     }
 
-    Pzem.send_retry = 5;
+    Pzem.send_retry = PZEM_RETRY;
     PzemSend(pzem_commands[Pzem.read_state]);
   }
   else {
     Pzem.send_retry--;
-    if ((Energy.phase_count > 1) && (0 == Pzem.send_retry) && (uptime < PZEM_STABILIZE)) {
+    if ((Energy.phase_count > 1) && (0 == Pzem.send_retry) && (TasmotaGlobal.uptime < PZEM_STABILIZE)) {
       Energy.phase_count--;  // Decrement phases if no response after retry within 30 seconds after restart
+      if (TasmotaGlobal.discovery_counter) {
+        TasmotaGlobal.discovery_counter += (PZEM_RETRY / 4) + 1;  // Don't send Discovery yet, delay by 5 * 250ms + 1s
+      }
     }
   }
 }
@@ -241,23 +245,23 @@ void PzemEvery250ms(void)
 void PzemSnsInit(void)
 {
   // Software serial init needs to be done here as earlier (serial) interrupts may lead to Exceptions
-  PzemSerial = new TasmotaSerial(pin[GPIO_PZEM004_RX], pin[GPIO_PZEM0XX_TX], 1);
+  PzemSerial = new TasmotaSerial(Pin(GPIO_PZEM004_RX), Pin(GPIO_PZEM0XX_TX), 1);
   if (PzemSerial->begin(9600)) {
     if (PzemSerial->hardwareSerial()) {
       ClaimSerial();
     }
-    Energy.phase_count = 3;  // Start off with three phases
+    Energy.phase_count = ENERGY_MAX_PHASES;  // Start off with three phases
     Pzem.phase = 0;
     Pzem.read_state = 1;
   } else {
-    energy_flg = ENERGY_NONE;
+    TasmotaGlobal.energy_driver = ENERGY_NONE;
   }
 }
 
 void PzemDrvInit(void)
 {
-  if ((pin[GPIO_PZEM004_RX] < 99) && (pin[GPIO_PZEM0XX_TX] < 99)) {  // Any device with a Pzem004T
-    energy_flg = XNRG_03;
+  if (PinUsed(GPIO_PZEM004_RX) && PinUsed(GPIO_PZEM0XX_TX)) {  // Any device with a Pzem004T
+    TasmotaGlobal.energy_driver = XNRG_03;
   }
 }
 
@@ -266,7 +270,7 @@ bool PzemCommand(void)
   bool serviced = true;
 
   if (CMND_MODULEADDRESS == Energy.command_code) {
-    if ((XdrvMailbox.payload > 0) && (XdrvMailbox.payload < 4)) {
+    if ((XdrvMailbox.payload > 0) && (XdrvMailbox.payload <= ENERGY_MAX_PHASES)) {
       Pzem.address = XdrvMailbox.payload;  // Valid addresses are 1, 2 and 3
     }
   }
@@ -285,7 +289,7 @@ bool Xnrg03(uint8_t function)
 
   switch (function) {
     case FUNC_EVERY_250_MSECOND:
-      if (PzemSerial && (uptime > 4)) { PzemEvery250ms(); }
+      if (PzemSerial) { PzemEvery250ms(); }
       break;
     case FUNC_COMMAND:
       result = PzemCommand();

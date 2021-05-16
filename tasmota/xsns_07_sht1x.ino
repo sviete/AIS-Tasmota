@@ -1,7 +1,7 @@
 /*
   xsns_07_sht1x.ino - SHT1x temperature and sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 #ifdef USE_I2C
 #ifdef USE_SHT
 /*********************************************************************************************\
- * SHT1x - Temperature and Humidy
+ * SHT1x - Temperature and Humidity
  *
  * Reading temperature and humidity takes about 320 milliseconds!
  * Source: Marinus vd Broek https://github.com/ESP8266nu/ESPEasy
@@ -29,6 +29,7 @@
 \*********************************************************************************************/
 
 #define XSNS_07             7
+#define XI2C_08             8  // See I2CDEVICES.md
 
 enum {
   SHT1X_CMD_MEASURE_TEMP  = B00000011,
@@ -36,8 +37,8 @@ enum {
   SHT1X_CMD_SOFT_RESET    = B00011110
 };
 
-uint8_t sht_sda_pin;
-uint8_t sht_scl_pin;
+int8_t sht_sda_pin;
+int8_t sht_scl_pin;
 uint8_t sht_type = 0;
 char sht_types[] = "SHT1X";
 uint8_t sht_valid = 0;
@@ -84,8 +85,8 @@ bool ShtSendCommand(const uint8_t cmd)
     ackerror = true;
   }
   if (ackerror) {
-    sht_type = 0;
-    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_SHT1 D_SENSOR_DID_NOT_ACK_COMMAND));
+//    sht_type = 0;
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_SHT1 D_SENSOR_DID_NOT_ACK_COMMAND));
   }
   return (!ackerror);
 }
@@ -99,8 +100,8 @@ bool ShtAwaitResult(void)
     }
     delay(20);
   }
-  AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_SHT1 D_SENSOR_BUSY));
-  sht_type = 0;
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_SHT1 D_SENSOR_BUSY));
+//  sht_type = 0;
   return false;
 }
 
@@ -148,7 +149,7 @@ bool ShtRead(void)
   float rhLinear = c1 + c2 * humRaw + c3 * humRaw * humRaw;
   sht_humidity = (sht_temperature - 25) * (t1 + t2 * humRaw) + rhLinear;
   sht_temperature = ConvertTemp(sht_temperature);
-  ConvertHumidity(sht_humidity);  // Set global humidity
+  sht_humidity = ConvertHumidity(sht_humidity);
 
   sht_valid = SENSOR_MAX_MISS;
   return true;
@@ -158,15 +159,11 @@ bool ShtRead(void)
 
 void ShtDetect(void)
 {
-  if (sht_type) {
-    return;
-  }
-
-  sht_sda_pin = pin[GPIO_I2C_SDA];
-  sht_scl_pin = pin[GPIO_I2C_SCL];
+  sht_sda_pin = Pin(GPIO_I2C_SDA);
+  sht_scl_pin = Pin(GPIO_I2C_SCL);
   if (ShtRead()) {
     sht_type = 1;
-    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_I2C D_SHT1X_FOUND));
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_I2C D_SHT1X_FOUND));
   } else {
     Wire.begin(sht_sda_pin, sht_scl_pin);
     sht_type = 0;
@@ -175,11 +172,10 @@ void ShtDetect(void)
 
 void ShtEverySecond(void)
 {
-  if (sht_type && !(uptime %4)) {  // Update every 4 seconds
+  if (!(TasmotaGlobal.uptime %4)) {  // Every 4 seconds
     // 344mS
     if (!ShtRead()) {
       AddLogMissed(sht_types, sht_valid);
-//      if (!sht_valid) { sht_type = 0; }
     }
   }
 }
@@ -187,30 +183,7 @@ void ShtEverySecond(void)
 void ShtShow(bool json)
 {
   if (sht_valid) {
-    char temperature[33];
-    dtostrfd(sht_temperature, Settings.flag2.temperature_resolution, temperature);
-    char humidity[33];
-    dtostrfd(sht_humidity, Settings.flag2.humidity_resolution, humidity);
-
-    if (json) {
-      ResponseAppend_P(JSON_SNS_TEMPHUM, sht_types, temperature, humidity);
-#ifdef USE_DOMOTICZ
-      if (0 == tele_period) {
-        DomoticzTempHumSensor(temperature, humidity);
-      }
-#endif  // USE_DOMOTICZ
-#ifdef USE_KNX
-      if (0 == tele_period) {
-        KnxSensor(KNX_TEMPERATURE, sht_temperature);
-        KnxSensor(KNX_HUMIDITY, sht_humidity);
-      }
-#endif  // USE_KNX
-#ifdef USE_WEBSERVER
-    } else {
-      WSContentSend_PD(HTTP_SNS_TEMP, sht_types, temperature, TempUnit());
-      WSContentSend_PD(HTTP_SNS_HUM, sht_types, humidity);
-#endif  // USE_WEBSERVER
-    }
+    TempHumDewShow(json, (0 == TasmotaGlobal.tele_period), sht_types, sht_temperature, sht_humidity);
   }
 }
 
@@ -220,14 +193,15 @@ void ShtShow(bool json)
 
 bool Xsns07(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_08)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    ShtDetect();
+  }
+  else if (sht_type) {
     switch (function) {
-//      case FUNC_PREP_BEFORE_TELEPERIOD:  // As this is not a real I2C device it may interfere with other sensors
-      case FUNC_INIT:                      // Move detection to restart only removing interference
-        ShtDetect();
-        break;
       case FUNC_EVERY_SECOND:
         ShtEverySecond();
         break;

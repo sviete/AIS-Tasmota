@@ -1,7 +1,7 @@
 /*
   xsns_15_mhz19.ino - MH-Z19(B) CO2 sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -123,7 +123,7 @@ size_t MhzSendCmd(uint8_t command_id)
   memcpy_P(&mhz_send[6], kMhzCommands[command_id] + sizeof(uint16_t), sizeof(uint16_t));
   mhz_send[8] = MhzCalculateChecksum(mhz_send);
 
-//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("Final MhzCommand: %x %x %x %x %x %x %x %x %x"),mhz_send[0],mhz_send[1],mhz_send[2],mhz_send[3],mhz_send[4],mhz_send[5],mhz_send[6],mhz_send[7],mhz_send[8]);
+//  AddLog_P(LOG_LEVEL_DEBUG, PSTR("Final MhzCommand: %x %x %x %x %x %x %x %x %x"),mhz_send[0],mhz_send[1],mhz_send[2],mhz_send[3],mhz_send[4],mhz_send[5],mhz_send[6],mhz_send[7],mhz_send[8]);
 
   return MhzSerial->write(mhz_send, sizeof(mhz_send));
 }
@@ -200,17 +200,17 @@ void MhzEverySecond(void)
     AddLogBuffer(LOG_LEVEL_DEBUG_MORE, mhz_response, counter);
 
     if (counter < 9) {
-//      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "MH-Z19 comms timeout"));
+//      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "MH-Z19 comms timeout"));
       return;
     }
 
     uint8_t crc = MhzCalculateChecksum(mhz_response);
     if (mhz_response[8] != crc) {
-//      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "MH-Z19 crc error"));
+//      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "MH-Z19 crc error"));
       return;
     }
     if (0xFF != mhz_response[0] || 0x86 != mhz_response[1]) {
-//      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "MH-Z19 bad response"));
+//      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "MH-Z19 bad response"));
       return;
     }
 
@@ -230,7 +230,9 @@ void MhzEverySecond(void)
       mhz_type = (s) ? 1 : 2;
       if (MhzCheckAndApplyFilter(ppm, s)) {
         mhz_retry = MHZ19_RETRY_COUNT;
+#ifdef USE_LIGHT
         LightSetSignal(CO2_LOW, CO2_HIGH, mhz_last_ppm);
+#endif  // USE_LIGHT
 
         if (0 == s || 64 == s) {  // Reading is stable.
           if (mhz_abc_must_apply) {
@@ -323,8 +325,8 @@ bool MhzCommandSensor(void)
 void MhzInit(void)
 {
   mhz_type = 0;
-  if ((pin[GPIO_MHZ_RXD] < 99) && (pin[GPIO_MHZ_TXD] < 99)) {
-    MhzSerial = new TasmotaSerial(pin[GPIO_MHZ_RXD], pin[GPIO_MHZ_TXD], 1);
+  if (PinUsed(GPIO_MHZ_RXD) && PinUsed(GPIO_MHZ_TXD)) {
+    MhzSerial = new TasmotaSerial(Pin(GPIO_MHZ_RXD), Pin(GPIO_MHZ_TXD), 1);
     if (MhzSerial->begin(9600)) {
       if (MhzSerial->hardwareSerial()) { ClaimSerial(); }
       mhz_type = 1;
@@ -336,23 +338,22 @@ void MhzInit(void)
 void MhzShow(bool json)
 {
   char types[7] = "MHZ19B";  // MHZ19B for legacy reasons. Prefered is MHZ19
-  char temperature[33];
-  dtostrfd(mhz_temperature, Settings.flag2.temperature_resolution, temperature);
   char model[3];
   GetTextIndexed(model, sizeof(model), mhz_type -1, kMhzModels);
 
   if (json) {
-    ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_MODEL "\":\"%s\",\"" D_JSON_CO2 "\":%d,\"" D_JSON_TEMPERATURE "\":%s}"), types, model, mhz_last_ppm, temperature);
+    ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_MODEL "\":\"%s\",\"" D_JSON_CO2 "\":%d,\"" D_JSON_TEMPERATURE "\":%*_f}"),
+      types, model, mhz_last_ppm, Settings.flag2.temperature_resolution, &mhz_temperature);
 #ifdef USE_DOMOTICZ
-    if (0 == tele_period) {
+    if (0 == TasmotaGlobal.tele_period) {
       DomoticzSensor(DZ_AIRQUALITY, mhz_last_ppm);
-      DomoticzSensor(DZ_TEMP, temperature);
+      DomoticzFloatSensor(DZ_TEMP, mhz_temperature);
     }
 #endif  // USE_DOMOTICZ
 #ifdef USE_WEBSERVER
   } else {
     WSContentSend_PD(HTTP_SNS_CO2, types, mhz_last_ppm);
-    WSContentSend_PD(HTTP_SNS_TEMP, types, temperature, TempUnit());
+    WSContentSend_Temp(types, mhz_temperature);
 #endif  // USE_WEBSERVER
   }
 }

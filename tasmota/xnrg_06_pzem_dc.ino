@@ -1,7 +1,7 @@
 /*
   xnrg_06_pzem_dc.ino - PZEM-003,017 Modbus DC energy sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -62,7 +62,7 @@ void PzemDcEverySecond(void)
     AddLogBuffer(LOG_LEVEL_DEBUG_MORE, buffer, PzemDcModbus->ReceiveCount());
 
     if (error) {
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("PDC: PzemDc %d error %d"), PZEM_DC_DEVICE_ADDRESS + PzemDc.channel, error);
+      AddLog(LOG_LEVEL_DEBUG, PSTR("PDC: PzemDc %d error %d"), PZEM_DC_DEVICE_ADDRESS + PzemDc.channel, error);
     } else {
       Energy.data_valid[PzemDc.channel] = 0;
       if (8 == registers) {
@@ -78,7 +78,7 @@ void PzemDcEverySecond(void)
         PzemDc.energy += (float)((buffer[13] << 24) + (buffer[14] << 16) + (buffer[11] << 8) + buffer[12]);             // 4294967295 Wh
         if (PzemDc.channel == Energy.phase_count -1) {
           if (PzemDc.energy > PzemDc.last_energy) {  // Handle missed channel
-            if (uptime > PZEM_DC_STABILIZE) {
+            if (TasmotaGlobal.uptime > PZEM_DC_STABILIZE) {
               EnergyUpdateTotal(PzemDc.energy, false);
             }
             PzemDc.last_energy = PzemDc.energy;
@@ -105,30 +105,33 @@ void PzemDcEverySecond(void)
   }
   else {
     PzemDc.send_retry--;
-    if ((Energy.phase_count > 1) && (0 == PzemDc.send_retry) && (uptime < PZEM_DC_STABILIZE)) {
+    if ((Energy.phase_count > 1) && (0 == PzemDc.send_retry) && (TasmotaGlobal.uptime < PZEM_DC_STABILIZE)) {
       Energy.phase_count--;  // Decrement channels if no response after retry within 30 seconds after restart
+      if (TasmotaGlobal.discovery_counter) {
+        TasmotaGlobal.discovery_counter += ENERGY_WATCHDOG + 1;  // Don't send Discovery yet, delay by 4s + 1s
+      }
     }
   }
 }
 
 void PzemDcSnsInit(void)
 {
-  PzemDcModbus = new TasmotaModbus(pin[GPIO_PZEM017_RX], pin[GPIO_PZEM0XX_TX]);
+  PzemDcModbus = new TasmotaModbus(Pin(GPIO_PZEM017_RX), Pin(GPIO_PZEM0XX_TX));
   uint8_t result = PzemDcModbus->Begin(9600, 2);  // Uses two stop bits!!
   if (result) {
     if (2 == result) { ClaimSerial(); }
     Energy.type_dc = true;
-    Energy.phase_count = 3;  // Start off with three channels
+    Energy.phase_count = ENERGY_MAX_PHASES;  // Start off with three channels
     PzemDc.channel = 0;
   } else {
-    energy_flg = ENERGY_NONE;
+    TasmotaGlobal.energy_driver = ENERGY_NONE;
   }
 }
 
 void PzemDcDrvInit(void)
 {
-  if ((pin[GPIO_PZEM017_RX] < 99) && (pin[GPIO_PZEM0XX_TX] < 99)) {
-    energy_flg = XNRG_06;
+  if (PinUsed(GPIO_PZEM017_RX) && PinUsed(GPIO_PZEM0XX_TX)) {
+    TasmotaGlobal.energy_driver = XNRG_06;
   }
 }
 
@@ -155,7 +158,7 @@ bool Xnrg06(uint8_t function)
 
   switch (function) {
     case FUNC_ENERGY_EVERY_SECOND:
-      if (uptime > 4) { PzemDcEverySecond(); }  // Fix start up issue #5875
+      if (TasmotaGlobal.uptime > 4) { PzemDcEverySecond(); }  // Fix start up issue #5875
       break;
     case FUNC_COMMAND:
       result = PzemDcCommand();

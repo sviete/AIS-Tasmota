@@ -1,7 +1,7 @@
 /*
   xsns_20_novasds.ino - Nova SDS011/SDS021 particle concentration sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -82,7 +82,7 @@ bool NovaSdsCommand(uint8_t byte1, uint8_t byte2, uint8_t byte3, uint16_t sensor
   }
 
 //  char hex_char[60];
-//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("SDS: Send %s"), ToHex_P((unsigned char*)novasds_cmnd, 19, hex_char, sizeof(hex_char), ' '));
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("SDS: Send %s"), ToHex_P((unsigned char*)novasds_cmnd, 19, hex_char, sizeof(hex_char), ' '));
 
   // send cmnd
   NovaSdsSerial->write(novasds_cmnd, sizeof(novasds_cmnd));
@@ -115,7 +115,7 @@ bool NovaSdsCommand(uint8_t byte1, uint8_t byte2, uint8_t byte3, uint16_t sensor
 
   // checksum & tail check
   if ((0xAB != recbuf[9] ) || (recbuf[8] != ((recbuf[2] + recbuf[3] + recbuf[4] + recbuf[5] + recbuf[6] + recbuf[7]) & 0xFF))) {
-    AddLog_P(LOG_LEVEL_DEBUG, PSTR("SDS: " D_CHECKSUM_FAILURE));
+    AddLog(LOG_LEVEL_DEBUG, PSTR("SDS: " D_CHECKSUM_FAILURE));
     return false;
   }
 
@@ -162,17 +162,17 @@ void NovaSdsSecond(void)                 // Every second
   else
     cont_mode = 0;
 
-  if(tele_period == Settings.tele_period -  Settings.novasds_startingoffset && !cont_mode)
+  if(TasmotaGlobal.tele_period == Settings.tele_period -  Settings.novasds_startingoffset && !cont_mode)
   { //lets start fan and laser
     NovaSdsCommand(NOVA_SDS_SLEEP_AND_WORK, NOVA_SDS_SET_MODE, NOVA_SDS_WORK, NOVA_SDS_DEVICE_ID, nullptr);
   }
-  if(tele_period >= Settings.tele_period-5 && tele_period <= Settings.tele_period-2)
+  if(TasmotaGlobal.tele_period >= Settings.tele_period-5 && TasmotaGlobal.tele_period <= Settings.tele_period-2)
   { //we are doing 4 measurements here
     if(!(NovaSdsReadData())) novasds_valid=0;
     pm100_sum += novasds_data.pm100;
     pm25_sum  += novasds_data.pm25;
   }
-  if(tele_period == Settings.tele_period-1)
+  if(TasmotaGlobal.tele_period == Settings.tele_period-1)
   { //calculate the average of 4 measuremens
     novasds_data.pm100 = pm100_sum >> 2;
     novasds_data.pm25  = pm25_sum >> 2;
@@ -202,8 +202,8 @@ bool NovaSdsCommandSensor(void)
 void NovaSdsInit(void)
 {
   novasds_type = 0;
-  if (pin[GPIO_SDS0X1_RX] < 99 && pin[GPIO_SDS0X1_TX] < 99) {
-    NovaSdsSerial = new TasmotaSerial(pin[GPIO_SDS0X1_RX], pin[GPIO_SDS0X1_TX], 1);
+  if (PinUsed(GPIO_SDS0X1_RX) && PinUsed(GPIO_SDS0X1_TX)) {
+    NovaSdsSerial = new TasmotaSerial(Pin(GPIO_SDS0X1_RX), Pin(GPIO_SDS0X1_TX), 1);
     if (NovaSdsSerial->begin(9600)) {
       if (NovaSdsSerial->hardwareSerial()) {
         ClaimSerial();
@@ -232,7 +232,7 @@ void NovaSdsShow(bool json)
     if (json) {
       ResponseAppend_P(PSTR(",\"SDS0X1\":{\"PM2.5\":%s,\"PM10\":%s}"), pm2_5, pm10);
 #ifdef USE_DOMOTICZ
-      if (0 == tele_period) {
+      if (0 == TasmotaGlobal.tele_period) {
         DomoticzSensor(DZ_VOLTAGE, pm2_5);  // PM2.5
         DomoticzSensor(DZ_CURRENT, pm10);   // PM10
       }

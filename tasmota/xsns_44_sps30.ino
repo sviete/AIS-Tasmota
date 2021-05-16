@@ -1,7 +1,7 @@
 /*
   xsns_44_sps30.ino - Sensirion SPS30 support for Tasmota
 
-  Copyright (C) 2019  Gerhard Mutz and Theo Arends
+  Copyright (C) 2021  Gerhard Mutz and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -21,11 +21,14 @@
 #ifdef USE_SPS30
 
 #define XSNS_44 44
+#define XI2C_30 30  // See I2CDEVICES.md
 
 #define SPS30_ADDR 0x69
 
 #include <Wire.h>
+#ifdef ESP8266
 #include <twi.h>
+#endif
 
 uint8_t sps30_ready = 0;
 uint8_t sps30_running;
@@ -73,7 +76,9 @@ uint8_t sps30_calc_CRC(uint8_t *data) {
 
 void CmdClean(void);
 
+#ifdef ESP8266
 unsigned char twi_readFrom(unsigned char address, unsigned char* buf, unsigned int len, unsigned char sendStop);
+#endif
 
 void sps30_get_data(uint16_t cmd, uint8_t *data, uint8_t dlen) {
 unsigned char cmdb[2];
@@ -92,7 +97,12 @@ uint8_t twi_buff[64];
   dlen/=2;
   dlen*=3;
 
+#ifdef ESP8266
   twi_readFrom(SPS30_ADDR,twi_buff,dlen,1);
+#endif  // ESP8266
+#ifdef ESP32
+  Wire.readTransmission(SPS30_ADDR,twi_buff,dlen,1, NULL);
+#endif  // ESP32
 
   uint8_t bind=0;
   while (bind<dlen) {
@@ -126,14 +136,14 @@ unsigned char cmdb[6];
   Wire.endTransmission();
 }
 
-void SPS30_Detect() {
+void SPS30_Detect(void)
+{
+  if (!I2cSetDevice(SPS30_ADDR)) { return; }
+  I2cSetActiveFound(SPS30_ADDR, "SPS30");
 
-  if (!I2cDevice(SPS30_ADDR)) {
-    return;
-  }
   uint8_t dcode[32];
   sps30_get_data(SPS_CMD_GET_SERIAL,dcode,sizeof(dcode));
-  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("sps30 found with serial: %s"),dcode);
+  AddLog(LOG_LEVEL_DEBUG, PSTR("sps30 found with serial: %s"),dcode);
   sps30_cmd(SPS_CMD_START_MEASUREMENT);
   sps30_running = 1;
   sps30_ready = 1;
@@ -155,12 +165,9 @@ const char HTTP_SNS_SPS30_c[] PROGMEM ="{s}SPS30 " "TYPSIZ" "{m}%s " "um" "{e}";
 //uint8_t sps30_inuse_hours;
 
 void SPS30_Every_Second() {
-
-  if (!sps30_ready) return;
   if (!sps30_running) return;
 
-
-  if (uptime%10==0) {
+  if (TasmotaGlobal.uptime%10==0) {
     uint8_t vars[sizeof(float)*10];
     sps30_get_data(SPS_CMD_READ_MEASUREMENT,vars,sizeof(vars));
     float *fp=&sps30_result.PM1_0;
@@ -180,7 +187,7 @@ void SPS30_Every_Second() {
     }
   }
 
-  if (uptime%3600==0 && uptime>60) {
+  if (TasmotaGlobal.uptime%3600==0 && TasmotaGlobal.uptime>60) {
     // should auto clean once per week runtime
     // so count hours, should be in Settings
     SPS30_HOURS++;
@@ -192,16 +199,11 @@ void SPS30_Every_Second() {
 
 }
 
-void SPS30_Show(bool json) {
+void SPS30_Show(bool json)
+{
+  if (!sps30_running) { return; }
+
   char str[64];
-  if (!sps30_ready) {
-    return;
-  }
-
-  if (!sps30_running) {
-    return;
-  }
-
   if (json) {
     dtostrfd(sps30_result.PM1_0,PMDP,str);
     ResponseAppend_P(PSTR(",\"SPS30\":{\"" "PM1_0" "\":%s"), str);
@@ -248,16 +250,17 @@ void SPS30_Show(bool json) {
     WSContentSend_PD(HTTP_SNS_SPS30_c,str);
 #endif
   }
-
 }
 
-void CmdClean(void) {
+void CmdClean(void)
+{
   sps30_cmd(SPS_CMD_CLEAN);
   ResponseTime_P(PSTR(",\"SPS30\":{\"CFAN\":\"true\"}}"));
-  MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);
+  MqttPublishTeleSensor();
 }
 
-bool SPS30_cmd(void) {
+bool SPS30_cmd(void)
+{
   bool serviced = true;
   if (XdrvMailbox.data_len > 0) {
       char *cp=XdrvMailbox.data;
@@ -280,32 +283,33 @@ bool SPS30_cmd(void) {
  * Interface
 \*********************************************************************************************/
 
-
 bool Xsns44(byte function)
 {
+  if (!I2cEnabled(XI2C_30)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    SPS30_Detect();
+  }
+  else if (sps30_ready) {
     switch (function) {
-      case FUNC_INIT:
-        SPS30_Detect();
-        break;
       case FUNC_EVERY_SECOND:
         SPS30_Every_Second();
         break;
       case FUNC_JSON_APPEND:
         SPS30_Show(1);
         break;
+  #ifdef USE_WEBSERVER
+      case FUNC_WEB_SENSOR:
+        SPS30_Show(0);
+        break;
+  #endif  // USE_WEBSERVER
       case FUNC_COMMAND_SENSOR:
         if (XSNS_44 == XdrvMailbox.index) {
           result = SPS30_cmd();
         }
         break;
-#ifdef USE_WEBSERVER
-      case FUNC_WEB_SENSOR:
-        SPS30_Show(0);
-        break;
-#endif  // USE_WEBSERVER
     }
   }
   return result;

@@ -1,7 +1,7 @@
 /*
   xsns_16_tsl2561.ino - TSL2561 light sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Joachim Banzhaf
+  Copyright (C) 2021  Theo Arends and Joachim Banzhaf
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 \*********************************************************************************************/
 
 #define XSNS_16             16
+#define XI2C_16             16  // See I2CDEVICES.md
 
 #include <Tsl2561Util.h>
 
@@ -36,6 +37,8 @@ Tsl2561 Tsl(Wire);
 uint8_t tsl2561_type = 0;
 uint8_t tsl2561_valid = 0;
 uint32_t tsl2561_milliLux = 0;
+uint32_t tsl2561_full = 0;
+uint32_t tsl2561_ir = 0;
 char tsl2561_types[] = "TSL2561";
 
 bool Tsl2561Read(void)
@@ -46,15 +49,18 @@ bool Tsl2561Read(void)
   bool gain;
   Tsl2561::exposure_t exposure;
   uint16_t scaledFull, scaledIr;
-  uint32_t full, ir;
 
     if (Tsl.on()) {
       if (Tsl.id(id)
         && Tsl2561Util::autoGain(Tsl, gain, exposure, scaledFull, scaledIr)
-        && Tsl2561Util::normalizedLuminosity(gain, exposure, full = scaledFull, ir = scaledIr)
-        && Tsl2561Util::milliLux(full, ir, tsl2561_milliLux, Tsl2561::packageCS(id))) {
+        && Tsl2561Util::normalizedLuminosity(gain, exposure, tsl2561_full = scaledFull, tsl2561_ir = scaledIr)) {
+        if (! Tsl2561Util::milliLux(tsl2561_full, tsl2561_ir, tsl2561_milliLux, Tsl2561::packageCS(id))) {
+          tsl2561_milliLux = 0;
+        }
       } else{
         tsl2561_milliLux = 0;
+        tsl2561_full = 0;
+        tsl2561_ir = 0;
       }
     }
   tsl2561_valid = SENSOR_MAX_MISS;
@@ -63,32 +69,23 @@ bool Tsl2561Read(void)
 
 void Tsl2561Detect(void)
 {
-  if (tsl2561_type) { return; }
-  uint8_t id;
-
-  if (I2cDevice(0x29) || I2cDevice(0x39) || I2cDevice(0x49)) {
+  if (I2cSetDevice(0x29) || I2cSetDevice(0x39) || I2cSetDevice(0x49)) {
+    uint8_t id;
     Tsl.begin();
     if (!Tsl.id(id)) return;
     if (Tsl.on()) {
       tsl2561_type = 1;
-      AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, tsl2561_types, Tsl.address(), id);
+      I2cSetActiveFound(Tsl.address(), tsl2561_types);
     }
   }
 }
 
 void Tsl2561EverySecond(void)
 {
-  if (90 == (uptime %100)) {
-    // 1mS
-    Tsl2561Detect();
-  }
-  else if (!(uptime %2)) {  // Update every 2 seconds
+  if (!(TasmotaGlobal.uptime %2)) {  // Every 2 seconds
     // ?mS - 4Sec
-    if (tsl2561_type) {
-      if (!Tsl2561Read()) {
-        AddLogMissed(tsl2561_types, tsl2561_valid);
-               if (!tsl2561_valid) { tsl2561_type = 0; }
-      }
+    if (!Tsl2561Read()) {
+      AddLogMissed(tsl2561_types, tsl2561_valid);
     }
   }
 }
@@ -102,10 +99,10 @@ void Tsl2561Show(bool json)
 {
   if (tsl2561_valid) {
     if (json) {
-      ResponseAppend_P(PSTR(",\"TSL2561\":{\"" D_JSON_ILLUMINANCE "\":%u.%03u}"),
-        tsl2561_milliLux / 1000, tsl2561_milliLux % 1000);
+      ResponseAppend_P(PSTR(",\"TSL2561\":{\"" D_JSON_ILLUMINANCE "\":%u.%03u,\"IR\":%u,\"Broadband\":%u}"),
+        tsl2561_milliLux / 1000, tsl2561_milliLux % 1000, tsl2561_ir, tsl2561_full);
 #ifdef USE_DOMOTICZ
-      if (0 == tele_period) { DomoticzSensor(DZ_ILLUMINANCE, (tsl2561_milliLux + 500) / 1000); }
+      if (0 == TasmotaGlobal.tele_period) { DomoticzSensor(DZ_ILLUMINANCE, (tsl2561_milliLux + 500) / 1000); }
 #endif  // USE_DOMOTICZ
 #ifdef USE_WEBSERVER
     } else {
@@ -121,13 +118,15 @@ void Tsl2561Show(bool json)
 
 bool Xsns16(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_16)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    Tsl2561Detect();
+  }
+  else if (tsl2561_type) {
     switch (function) {
-      case FUNC_INIT:
-        Tsl2561Detect();
-        break;
       case FUNC_EVERY_SECOND:
         Tsl2561EverySecond();
         break;

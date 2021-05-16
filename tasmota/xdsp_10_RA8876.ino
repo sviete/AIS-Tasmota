@@ -1,7 +1,7 @@
 /*
   xdsp_09_SSD1351.ino - Display SSD1351 support for Tasmota
 
-  Copyright (C) 2019  Gerhard Mutz and Theo Arends
+  Copyright (C) 2021  Gerhard Mutz and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -22,41 +22,27 @@
 #ifdef USE_DISPLAY_RA8876
 
 #define XDSP_10                10
+#define XI2C_39                39  // See I2CDEVICES.md
 
 #define COLORED                1
 #define UNCOLORED              0
-
-// touch panel controller
-#define FT5316_address 0x38
 
 // using font 8 is opional (num=3)
 // very badly readable, but may be useful for graphs
 #define USE_TINY_FONT
 
 #include <RA8876.h>
-#include <FT6236.h>
 
-TouchLocation ra8876_pLoc;
+bool ra8876_init_done = false;
 uint8_t ra8876_ctouch_counter = 0;
-
-#ifdef USE_TOUCH_BUTTONS
-extern VButton *buttons[];
-#endif
-
-extern uint8_t *buffer;
 extern uint8_t color_type;
 RA8876 *ra8876;
 
-uint8_t FT5316_found;
-
 /*********************************************************************************************/
-void RA8876_InitDriver()
-{
-  if (!Settings.display_model) {
-    Settings.display_model = XDSP_10;
-  }
+void RA8876_InitDriver(void) {
+  if (PinUsed(GPIO_RA8876_CS) && (SPI_MOSI_MISO == TasmotaGlobal.spi_enabled)) {
 
-  if (XDSP_10 == Settings.display_model) {
+    Settings.display_model = XDSP_10;
 
     if (Settings.display_width != RA8876_TFTWIDTH) {
       Settings.display_width = RA8876_TFTWIDTH;
@@ -64,22 +50,13 @@ void RA8876_InitDriver()
     if (Settings.display_height != RA8876_TFTHEIGHT) {
       Settings.display_height = RA8876_TFTHEIGHT;
     }
-    buffer=0;
 
     // default colors
     fg_color = RA8876_WHITE;
     bg_color = RA8876_BLACK;
 
     // init renderer, must use hardware spi
-    if ((pin[GPIO_SSPI_CS]<99) && (pin[GPIO_SSPI_MOSI]==13) && (pin[GPIO_SSPI_MISO]==12) && (pin[GPIO_SSPI_SCLK]==14)) {
-      ra8876  = new RA8876(pin[GPIO_SSPI_CS],pin[GPIO_SSPI_MOSI],pin[GPIO_SSPI_MISO],pin[GPIO_SSPI_SCLK],pin[GPIO_BACKLIGHT]);
-    } else {
-      if ((pin[GPIO_SPI_CS]<99) && (pin[GPIO_SPI_MOSI]==13) && (pin[GPIO_SPI_MISO]==12) && (pin[GPIO_SPI_CLK]==14)) {
-        ra8876  = new RA8876(pin[GPIO_SPI_CS],pin[GPIO_SPI_MOSI],pin[GPIO_SPI_MISO],pin[GPIO_SPI_CLK],pin[GPIO_BACKLIGHT]);
-      } else {
-        return;
-      }
-    }
+    ra8876  = new RA8876(Pin(GPIO_RA8876_CS), Pin(GPIO_SPI_MOSI), Pin(GPIO_SPI_MISO), Pin(GPIO_SPI_CLK), Pin(GPIO_BACKLIGHT));
 
     ra8876->begin();
     renderer = ra8876;
@@ -97,146 +74,43 @@ void RA8876_InitDriver()
 #endif
     color_type = COLOR_COLOR;
 
-    if (i2c_flg && I2cDevice(FT5316_address)) {
-      FT6236begin(FT5316_address);
-      FT5316_found=1;
-    } else {
-      FT5316_found=0;
-    }
+#ifdef USE_FT5206
+    FT5206_Touch_Init(Wire);
+#endif
 
+    ra8876_init_done = true;
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: RA8876"));
   }
 }
 
-#ifdef USE_TOUCH_BUTTONS
-void RA8876_MQTT(uint8_t count,const char *cp) {
-  ResponseTime_P(PSTR(",\"RA8876\":{\"%s%d\":\"%d\"}}"), cp,count+1,(buttons[count]->vpower&0x80)>>7);
-  MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);
-}
 
-void RA8876_RDW_BUTT(uint32_t count,uint32_t pwr) {
-  buttons[count]->xdrawButton(pwr);
-  if (pwr) buttons[count]->vpower|=0x80;
-  else buttons[count]->vpower&=0x7f;
+#ifdef USE_FT5206
+#ifdef USE_TOUCH_BUTTONS
+
+// no rotation support
+void RA8876_RotConvert(int16_t *x, int16_t *y) {
+int16_t temp;
+  if (renderer) {
+    *x=*x*renderer->width()/800;
+    *y=*y*renderer->height()/480;
+
+    *x = renderer->width() - *x;
+    *y = renderer->height() - *y;
+  }
 }
 
 // check digitizer hit
-void FT5316Check() {
-uint16_t temp;
-uint8_t rbutt=0,vbutt=0;
-ra8876_ctouch_counter++;
-if (2 == ra8876_ctouch_counter) {
-  // every 100 ms should be enough
-  ra8876_ctouch_counter=0;
-  // panel has 800x480
-  if (FT6236readTouchLocation(&ra8876_pLoc,1)) {
-    ra8876_pLoc.x=ra8876_pLoc.x*RA8876_TFTWIDTH/800;
-    ra8876_pLoc.y=ra8876_pLoc.y*RA8876_TFTHEIGHT/480;
-    // did find a hit
-
-    if (renderer) {
-
-      // rotation not supported
-      ra8876_pLoc.x=RA8876_TFTWIDTH-ra8876_pLoc.x;
-      ra8876_pLoc.y=RA8876_TFTHEIGHT-ra8876_pLoc.y;
-
-      /*
-      uint8_t rot=renderer->getRotation();
-      switch (rot) {
-        case 0:
-          //temp=pLoc.y;
-          pLoc.x=renderer->width()-pLoc.x;
-          pLoc.y=renderer->height()-pLoc.y;
-          //pLoc.x=temp;
-          break;
-        case 1:
-          break;
-        case 2:
-          break;
-        case 3:
-          temp=pLoc.y;
-          pLoc.y=pLoc.x;
-          pLoc.x=renderer->width()-temp;
-          break;
-      }
-      */
-      //AddLog_P2(LOG_LEVEL_INFO, PSTR(">> %d,%d"),ra8876_pLoc.x,ra8876_pLoc.y);
-
-
-      //Serial.printf("loc x: %d , loc y: %d\n",pLoc.x,pLoc.y);
-
-      // now must compare with defined buttons
-      for (uint8_t count=0; count<MAXBUTTONS; count++) {
-        if (buttons[count]) {
-            uint8_t bflags=buttons[count]->vpower&0x7f;
-            if (buttons[count]->contains(ra8876_pLoc.x,ra8876_pLoc.y)) {
-                // did hit
-                buttons[count]->press(true);
-                if (buttons[count]->justPressed()) {
-                  if (!bflags) {
-                    // real button
-                    uint8_t pwr=bitRead(power,rbutt);
-                    if (!SendKey(KEY_BUTTON, rbutt+1, POWER_TOGGLE)) {
-                      ExecuteCommandPower(rbutt+1, POWER_TOGGLE, SRC_BUTTON);
-                      RA8876_RDW_BUTT(count,!pwr);
-                    }
-                  } else {
-                    // virtual button
-                    const char *cp;
-                    if (bflags==1) {
-                      // toggle button
-                      buttons[count]->vpower^=0x80;
-                      cp="TBT";
-                    } else {
-                      // push button
-                      buttons[count]->vpower|=0x80;
-                      cp="PBT";
-                    }
-                    buttons[count]->xdrawButton(buttons[count]->vpower&0x80);
-                    RA8876_MQTT(count,cp);
-                  }
-                }
-            }
-            if (!bflags) {
-              rbutt++;
-            } else {
-              vbutt++;
-            }
-        }
-      }
-    }
-  } else {
-    // no hit
-    for (uint8_t count=0; count<MAXBUTTONS; count++) {
-      if (buttons[count]) {
-        uint8_t bflags=buttons[count]->vpower&0x7f;
-        buttons[count]->press(false);
-        if (buttons[count]->justReleased()) {
-          if (bflags>0) {
-            if (bflags>1) {
-              // push button
-              buttons[count]->vpower&=0x7f;
-              RA8876_MQTT(count,"PBT");
-            }
-            buttons[count]->xdrawButton(buttons[count]->vpower&0x80);
-          }
-        }
-        if (!bflags) {
-          // check if power button stage changed
-          uint8_t pwr=bitRead(power,rbutt);
-          uint8_t vpwr=(buttons[count]->vpower&0x80)>>7;
-          if (pwr!=vpwr) {
-            RA8876_RDW_BUTT(count,pwr);
-          }
-          rbutt++;
-        }
-      }
-    }
-    ra8876_pLoc.x=0;
-    ra8876_pLoc.y=0;
+void RA8876_CheckTouch(void) {
+  ra8876_ctouch_counter++;
+  if (2 == ra8876_ctouch_counter) {
+    // every 100 ms should be enough
+    ra8876_ctouch_counter = 0;
+    Touch_Check(RA8876_RotConvert);
   }
 }
-}
-#endif  // USE_TOUCH_BUTTONS
+#endif // USE_TOUCH_BUTTONS
+#endif // USE_FT5206
+
 /*
 void testall() {
 ra8876->clearScreen(0);
@@ -428,14 +302,14 @@ bool Xdsp10(uint8_t function)
   if (FUNC_DISPLAY_INIT_DRIVER == function) {
       RA8876_InitDriver();
   }
-  else if (XDSP_10 == Settings.display_model) {
+  else if (ra8876_init_done && (XDSP_10 == Settings.display_model)) {
     switch (function) {
       case FUNC_DISPLAY_MODEL:
         result = true;
         break;
       case FUNC_DISPLAY_EVERY_50_MSECOND:
-#ifdef USE_TOUCH_BUTTONS
-        if (FT5316_found) FT5316Check();
+#ifdef USE_FT5206
+        if (FT5206_found) RA8876_CheckTouch();
 #endif
         break;
     }

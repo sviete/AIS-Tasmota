@@ -1,7 +1,7 @@
 /*
   xlgt_01_ws2812.ino - led string support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -47,45 +47,106 @@ void (* const Ws2812Command[])(void) PROGMEM = {
 
 #include <NeoPixelBus.h>
 
-#if (USE_WS2812_CTYPE == NEO_GRB)
-  typedef NeoGrbFeature selectedNeoFeatureType;
+// See NeoEspDmaMethod.h for available options
+// See NeoEspBitBangMethod.h for available options
+
+// Build `selectedNeoFeatureType` as Neo-Rgb-Feature
+// parametrized as: NEO_FEATURE_NEO+NEO_FEATURE_TYPE+NEO_FEATURE_FEATURE
+#define CONCAT2(A,B)    CONCAT2_(A,B)   // ensures expansion first, see https://stackoverflow.com/questions/3221896/how-can-i-guarantee-full-macro-expansion-of-a-parameter-before-paste
+#define CONCAT2_(A,B)    A ## B
+#define CONCAT3(A,B,C)    CONCAT3_(A,B,C)   // ensures expansion first, see https://stackoverflow.com/questions/3221896/how-can-i-guarantee-full-macro-expansion-of-a-parameter-before-paste
+#define CONCAT3_(A,B,C)    A ## B ## C
+
+#define NEO_FEATURE_NEO       Neo
+#define NEO_FEATURE_FEATURE   Feature
+
+// select the right Neo feature based on USE_WS2812_CTYPE
+// NEO_FEATURE_TYPE can be one of: Rgb (default), Grb, Brg, Rgb, Rgbw, Grbw
+#if   (USE_WS2812_CTYPE == NEO_GRB)
+  #define NEO_FEATURE_TYPE  Grb
 #elif (USE_WS2812_CTYPE == NEO_BRG)
-  typedef NeoBrgFeature selectedNeoFeatureType;
+  #define NEO_FEATURE_TYPE  Brg
 #elif (USE_WS2812_CTYPE == NEO_RBG)
-  typedef NeoRbgFeature selectedNeoFeatureType;
+  #define NEO_FEATURE_TYPE  Rbg
 #elif (USE_WS2812_CTYPE == NEO_RGBW)
-  typedef NeoRgbwFeature selectedNeoFeatureType;
+  #define NEO_FEATURE_TYPE  Rbgw
 #elif (USE_WS2812_CTYPE == NEO_GRBW)
-  typedef NeoGrbwFeature selectedNeoFeatureType;
-#else   // USE_WS2812_CTYPE
-  typedef NeoRgbFeature selectedNeoFeatureType;
+  #define NEO_FEATURE_TYPE  Grbw
+#else
+  #define NEO_FEATURE_TYPE  Rgb
+#endif
+
+// Exception for NEO_HW_P9813
+#if (USE_WS2812_HARDWARE == NEO_HW_P9813)
+  #undef NEO_FEATURE_NEO
+  #undef NEO_FEATURE_TYPE
+  #define NEO_FEATURE_NEO     P9813   // P9813BgrFeature
+  #define NEO_FEATURE_TYPE    Bgr
+  #undef USE_WS2812_DMA
+  #undef USE_WS2812_INVERTED
 #endif  // USE_WS2812_CTYPE
 
-#ifdef USE_WS2812_DMA
+typedef CONCAT3(NEO_FEATURE_NEO,NEO_FEATURE_TYPE,NEO_FEATURE_FEATURE) selectedNeoFeatureType;
 
-// See NeoEspDmaMethod.h for available options
+// selectedNeoSpeedType is built as Neo+Esp8266+Dma+Inverted+Ws2812x+Method
+// Or NEO_NEO+NEO_CHIP+NEO_PROTO+NEO_INV+NEO_HW+Method
+#define CONCAT6(A,B,C,D,E,F)    CONCAT6_(A,B,C,D,E,F)   // ensures expansion first, see https://stackoverflow.com/questions/3221896/how-can-i-guarantee-full-macro-expansion-of-a-parameter-before-paste
+#define CONCAT6_(A,B,C,D,E,F)    A ## B ## C ## D ## E ## F
+
+#define NEO_NEO         Neo
+
+#ifdef ESP32
+  #define NEO_CHIP      Esp32
+#else
+  #define NEO_CHIP      Esp8266
+#endif
+
+// Proto = DMA or BigBang
+#if defined(USE_WS2812_DMA) && defined(ESP8266)
+  #define NEO_PROTO     Dma
+#elif defined(USE_WS2812_RMT) && defined(ESP32)
+  #define NEO_PROTO     CONCAT2(Rmt,USE_WS2812_RMT)
+#elif defined(USE_WS2812_I2S) && defined(ESP32)
+  #define NEO_PROTO     CONCAT2(I2s,USE_WS2812_I2S)
+#else
+  #define NEO_PROTO     BitBang
+#endif
+
+#ifdef USE_WS2812_INVERTED
+  #define NEO_INV       Inverted
+#else
+  #define NEO_INV
+#endif
+
 #if (USE_WS2812_HARDWARE == NEO_HW_WS2812X)
-  typedef NeoEsp8266DmaWs2812xMethod selectedNeoSpeedType;
+  #define NEO_HW        Ws2812x
 #elif (USE_WS2812_HARDWARE == NEO_HW_SK6812)
-  typedef NeoEsp8266DmaSk6812Method selectedNeoSpeedType;
+  #define NEO_HW        Sk6812
 #elif (USE_WS2812_HARDWARE == NEO_HW_APA106)
-  typedef NeoEsp8266DmaApa106Method selectedNeoSpeedType;
+  #define NEO_HW        Apa106
 #else   // USE_WS2812_HARDWARE
-  typedef NeoEsp8266Dma800KbpsMethod selectedNeoSpeedType;
+  #define NEO_HW        800Kbps
 #endif  // USE_WS2812_HARDWARE
 
-#else   // USE_WS2812_DMA
 
-// See NeoEspBitBangMethod.h for available options
-#if (USE_WS2812_HARDWARE == NEO_HW_WS2812X)
-  typedef NeoEsp8266BitBangWs2812xMethod selectedNeoSpeedType;
-#elif (USE_WS2812_HARDWARE == NEO_HW_SK6812)
-  typedef NeoEsp8266BitBangSk6812Method selectedNeoSpeedType;
-#else   // USE_WS2812_HARDWARE
-  typedef NeoEsp8266BitBang800KbpsMethod selectedNeoSpeedType;
-#endif  // USE_WS2812_HARDWARE
+#if (USE_WS2812_HARDWARE == NEO_HW_P9813)
+  #undef NEO_NEO
+  #define NEO_NEO
+  #undef NEO_CHIP
+  #define NEO_CHIP
+  #undef NEO_PROTO
+  #define NEO_PROTO
+  #undef NEO_INV
+  #define NEO_INV
+  #undef NEO_HW
+  #define NEO_HW      P9813       // complete driver is P9813Method
+#endif
 
-#endif  // USE_WS2812_DMA
+#if defined(ESP8266) && defined(USE_WS2812_DMA)
+typedef CONCAT6(NEO_NEO,NEO_CHIP,NEO_PROTO,NEO_INV,NEO_HW,Method)   selectedNeoSpeedType;
+#else // Dma : different naming scheme
+typedef CONCAT6(NEO_NEO,NEO_CHIP,NEO_PROTO,NEO_HW,NEO_INV,Method)   selectedNeoSpeedType;
+#endif
 
 NeoPixelBus<selectedNeoFeatureType, selectedNeoSpeedType> *strip = nullptr;
 
@@ -134,6 +195,11 @@ struct WS2812 {
 } Ws2812;
 
 /********************************************************************************************/
+
+// For some reason map fails to compile so renamed to wsmap
+long wsmap(long x, long in_min, long in_max, long out_min, long out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 void Ws2812StripShow(void)
 {
@@ -191,7 +257,9 @@ void Ws2812UpdateHand(int position, uint32_t index)
 
   position = (position + Settings.light_rotation) % Settings.light_pixels;
 
-  if (Settings.flag.ws_clock_reverse) position = Settings.light_pixels -position;
+  if (Settings.flag.ws_clock_reverse) {  // SetOption16 - Switch between clockwise or counter-clockwise
+    position = Settings.light_pixels -position;
+  }
   WsColor hand_color = { Settings.ws_color[index][WS_RED], Settings.ws_color[index][WS_GREEN], Settings.ws_color[index][WS_BLUE] };
 
   Ws2812UpdatePixelColor(position, hand_color, 1);
@@ -238,9 +306,9 @@ void Ws2812GradientColor(uint32_t schemenr, struct WsColor* mColor, uint32_t ran
     end = (scheme.count -1) - end;
   }
   float dimmer = 100 / (float)Settings.light_dimmer;
-  float fmyRed = (float)map(rangeIndex % gradRange, 0, gradRange, scheme.colors[start].red, scheme.colors[end].red) / dimmer;
-  float fmyGrn = (float)map(rangeIndex % gradRange, 0, gradRange, scheme.colors[start].green, scheme.colors[end].green) / dimmer;
-  float fmyBlu = (float)map(rangeIndex % gradRange, 0, gradRange, scheme.colors[start].blue, scheme.colors[end].blue) / dimmer;
+  float fmyRed = (float)wsmap(rangeIndex % gradRange, 0, gradRange, scheme.colors[start].red, scheme.colors[end].red) / dimmer;
+  float fmyGrn = (float)wsmap(rangeIndex % gradRange, 0, gradRange, scheme.colors[start].green, scheme.colors[end].green) / dimmer;
+  float fmyBlu = (float)wsmap(rangeIndex % gradRange, 0, gradRange, scheme.colors[start].blue, scheme.colors[end].blue) / dimmer;
   mColor->red = (uint8_t)fmyRed;
   mColor->green = (uint8_t)fmyGrn;
   mColor->blue = (uint8_t)fmyBlu;
@@ -272,22 +340,15 @@ void Ws2812Gradient(uint32_t schemenr)
   WsColor oldColor, currentColor;
   Ws2812GradientColor(schemenr, &oldColor, range, gradRange, offset);
   currentColor = oldColor;
+  speed = speed ? speed : 1;    // should never happen, just avoid div0
   for (uint32_t i = 0; i < Settings.light_pixels; i++) {
     if (kWsRepeat[Settings.light_width] > 1) {
-      Ws2812GradientColor(schemenr, &currentColor, range, gradRange, i +offset);
+      Ws2812GradientColor(schemenr, &currentColor, range, gradRange, i + offset + 1);
     }
-    if (Settings.light_speed > 0) {
-      // Blend old and current color based on time for smooth movement.
-      c.R = map(Light.strip_timer_counter % speed, 0, speed, oldColor.red, currentColor.red);
-      c.G = map(Light.strip_timer_counter % speed, 0, speed, oldColor.green, currentColor.green);
-      c.B = map(Light.strip_timer_counter % speed, 0, speed, oldColor.blue, currentColor.blue);
-    }
-    else {
-      // No animation, just use the current color.
-      c.R = currentColor.red;
-      c.G = currentColor.green;
-      c.B = currentColor.blue;
-    }
+    // Blend old and current color based on time for smooth movement.
+    c.R = wsmap(Light.strip_timer_counter % speed, 0, speed, oldColor.red, currentColor.red);
+    c.G = wsmap(Light.strip_timer_counter % speed, 0, speed, oldColor.green, currentColor.green);
+    c.B = wsmap(Light.strip_timer_counter % speed, 0, speed, oldColor.blue, currentColor.blue);
     strip->SetPixelColor(i, c);
     oldColor = currentColor;
   }
@@ -387,7 +448,7 @@ char* Ws2812GetColor(uint32_t led, char* scolor)
   sl_ledcolor[2] = lcolor.B;
   scolor[0] = '\0';
   for (uint32_t i = 0; i < Light.subtype; i++) {
-    if (Settings.flag.decimal_text) {
+    if (Settings.flag.decimal_text) {  // SetOption17 - Switch between decimal or hexadecimal output (0 = hexadecimal, 1 = decimal)
       snprintf_P(scolor, 25, PSTR("%s%s%d"), scolor, (i > 0) ? "," : "", sl_ledcolor[i]);
     } else {
       snprintf_P(scolor, 25, PSTR("%s%02X"), scolor, sl_ledcolor[i]);
@@ -429,7 +490,7 @@ void Ws2812ShowScheme(void)
 
   switch (scheme) {
     case 0:  // Clock
-      if ((1 == state_250mS) || (Ws2812.show_next)) {
+      if ((1 == TasmotaGlobal.state_250mS) || (Ws2812.show_next)) {
         Ws2812Clock();
         Ws2812.show_next = 0;
       }
@@ -447,10 +508,14 @@ void Ws2812ShowScheme(void)
 
 void Ws2812ModuleSelected(void)
 {
-  if (pin[GPIO_WS2812] < 99) {  // RGB led
-
+#if (USE_WS2812_HARDWARE == NEO_HW_P9813)
+  if (PinUsed(GPIO_P9813_CLK) && PinUsed(GPIO_P9813_DAT)) {  // RGB led
+    strip = new NeoPixelBus<selectedNeoFeatureType, selectedNeoSpeedType>(WS2812_MAX_LEDS, Pin(GPIO_P9813_CLK), Pin(GPIO_P9813_DAT));
+#else
+  if (PinUsed(GPIO_WS2812)) {  // RGB led
     // For DMA, the Pin is ignored as it uses GPIO3 due to DMA hardware use.
-    strip = new NeoPixelBus<selectedNeoFeatureType, selectedNeoSpeedType>(WS2812_MAX_LEDS, pin[GPIO_WS2812]);
+    strip = new NeoPixelBus<selectedNeoFeatureType, selectedNeoSpeedType>(WS2812_MAX_LEDS, Pin(GPIO_WS2812));
+#endif  // NEO_HW_P9813
     strip->Begin();
 
     Ws2812Clear();
@@ -459,11 +524,11 @@ void Ws2812ModuleSelected(void)
     Light.max_scheme += WS2812_SCHEMES;
 
 #if (USE_WS2812_CTYPE > NEO_3LED)
-    light_type = LT_RGBW;
+    TasmotaGlobal.light_type = LT_RGBW;
 #else
-    light_type = LT_RGB;
+    TasmotaGlobal.light_type = LT_RGB;
 #endif
-    light_flg = XLGT_01;
+    TasmotaGlobal.light_driver = XLGT_01;
   }
 }
 

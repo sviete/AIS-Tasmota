@@ -1,7 +1,7 @@
 /*
   xsns_43_hre.ino - Badger HR-E Water Meter Encoder interface
 
-  Copyright (C) 2019  Jon Little
+  Copyright (C) 2021  Jon Little
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -71,10 +71,10 @@ bool hre_good =  false;
 // The settling times here were determined using a single unit hooked to a scope
 int hreReadBit()
 {
-   digitalWrite(pin[GPIO_HRE_CLOCK], HIGH);
+   digitalWrite(Pin(GPIO_HRE_CLOCK), HIGH);
    delay(1);
-   int bit = digitalRead(pin[GPIO_HRE_DATA]);
-   digitalWrite(pin[GPIO_HRE_CLOCK], LOW);
+   int bit = digitalRead(Pin(GPIO_HRE_DATA));
+   digitalWrite(Pin(GPIO_HRE_CLOCK), LOW);
    delay(1);
    return bit;
 }
@@ -110,12 +110,12 @@ void hreInit(void)
    hre_read_errors = 0;
    hre_good = false;
 
-   pinMode(pin[GPIO_HRE_CLOCK], OUTPUT);
-   pinMode(pin[GPIO_HRE_DATA], INPUT);
+   pinMode(Pin(GPIO_HRE_CLOCK), OUTPUT);
+   pinMode(Pin(GPIO_HRE_DATA), INPUT);
 
    // Note that the level shifter inverts this line and we want to leave it
    // high when not being read.
-   digitalWrite(pin[GPIO_HRE_CLOCK], LOW);
+   digitalWrite(Pin(GPIO_HRE_CLOCK), LOW);
 
    hre_state = hre_sync;
 }
@@ -137,12 +137,12 @@ void hreEvery50ms(void)
    switch (hre_state)
    {
       case hre_sync:
-         if (uptime < 10)
+         if (TasmotaGlobal.uptime < 10)
             break;
          sync_run = 0;
          sync_counter = 0;
          hre_state = hre_syncing;
-         AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "hre_state:hre_syncing"));
+         AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "hre_state:hre_syncing"));
          break;
 
       case hre_syncing:
@@ -165,19 +165,19 @@ void hreEvery50ms(void)
          if (sync_counter > 1000)
          {
             hre_state = hre_sleep;
-            AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE D_ERROR));
+            AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE D_ERROR));
          }
          break;
 
          // Start reading the data block
       case hre_read:
-         AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "sync_run:%d, sync_counter:%d"), sync_run, sync_counter);
+         AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "sync_run:%d, sync_counter:%d"), sync_run, sync_counter);
          read_counter = 0;
          parity_errors = 0;
-         curr_start = uptime;
+         curr_start = TasmotaGlobal.uptime;
          memset(buff, 0, sizeof(buff));
          hre_state = hre_reading;
-         AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "hre_state:hre_reading"));
+         AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "hre_state:hre_reading"));
          // So this is intended to fall through to the hre_reading section.
          // it seems that if there is much of a delay between getting the sync
          // bits and starting the read, the HRE won't output the message we
@@ -190,7 +190,7 @@ void hreEvery50ms(void)
 
          if (read_counter == 46)
          {
-            AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "pe:%d, re:%d, buff:%s"),
+            AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "pe:%d, re:%d, buff:%s"),
                       parity_errors, hre_read_errors, buff);
             if (parity_errors == 0)
             {
@@ -218,12 +218,12 @@ void hreEvery50ms(void)
       case hre_sleep:
          hre_usage_time = curr_start;
          hre_state = hre_sleeping;
-         AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "hre_state:hre_sleeping"));
+         AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HRE "hre_state:hre_sleeping"));
 
       case hre_sleeping:
          // If there isn't some delay between readings, rate calculations
          // aren't as accurate. 27 seconds will give about a 30 second refresh rate
-         if (uptime - hre_usage_time >= 27)
+         if (TasmotaGlobal.uptime - hre_usage_time >= 27)
             hre_state = hre_sync;
    }
 }
@@ -260,8 +260,7 @@ void hreShow(boolean json)
 bool Xsns43(byte function)
 {
    // If we don't have pins assigned give up quickly.
-   if (pin[GPIO_HRE_CLOCK] >= 99 || pin[GPIO_HRE_DATA] >= 99)
-      return false;
+   if (!PinUsed(GPIO_HRE_CLOCK) || !PinUsed(GPIO_HRE_DATA)) { return false; }
 
    switch (function)
    {

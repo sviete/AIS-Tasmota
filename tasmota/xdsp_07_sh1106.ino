@@ -1,7 +1,7 @@
 /*
   xdsp_07_SH1106.ino - Display Oled SH1106 support for Tasmota
 
-  Copyright (C) 2019  Theo Arends and Adafruit
+  Copyright (C) 2021  Theo Arends and Adafruit
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -25,9 +25,9 @@
 
 #define SPRINT(A) char str[32];sprintf(str,"val: %d ",A);Serial.println((char*)str);
 
-extern uint8_t *buffer;
 
 #define XDSP_07                7
+#define XI2C_06                6            // See I2CDEVICES.md
 
 #define OLED_ADDRESS1          0x3C         // Oled 128x32 I2C address
 #define OLED_ADDRESS2          0x3D         // Oled 128x64 I2C address
@@ -47,20 +47,22 @@ Adafruit_SH1106 *oled1106;
 /*********************************************************************************************/
 
 
-void SH1106InitDriver()
-{
+void SH1106InitDriver() {
+  if (!TasmotaGlobal.i2c_enabled) { return; }
+
   if (!Settings.display_model) {
-    if (I2cDevice(OLED_ADDRESS1)) {
+    if (I2cSetDevice(OLED_ADDRESS1)) {
       Settings.display_address[0] = OLED_ADDRESS1;
       Settings.display_model = XDSP_07;
     }
-    else if (I2cDevice(OLED_ADDRESS2)) {
+    else if (I2cSetDevice(OLED_ADDRESS2)) {
       Settings.display_address[0] = OLED_ADDRESS2;
       Settings.display_model = XDSP_07;
     }
   }
 
   if (XDSP_07 == Settings.display_model) {
+    I2cSetActiveFound(Settings.display_address[0], "SH1106");
 
     if (Settings.display_width != SH1106_LCDWIDTH) {
       Settings.display_width = SH1106_LCDWIDTH;
@@ -68,15 +70,9 @@ void SH1106InitDriver()
     if (Settings.display_height != SH1106_LCDHEIGHT) {
       Settings.display_height = SH1106_LCDHEIGHT;
     }
-
-    // allocate screen buffer
-    if (buffer) free(buffer);
-    buffer=(unsigned char*)calloc((SH1106_LCDWIDTH * SH1106_LCDHEIGHT) / 8,1);
-    if (!buffer) return;
-
     // init renderer
     oled1106 = new Adafruit_SH1106(SH1106_LCDWIDTH,SH1106_LCDHEIGHT);
-    renderer=oled1106;
+    renderer = oled1106;
     renderer->Begin(SH1106_SWITCHCAPVCC, Settings.display_address[0],0);
     renderer->DisplayInit(DISPLAY_INIT_MODE,Settings.display_size,Settings.display_rotate,Settings.display_font);
     renderer->setTextColor(1,0);
@@ -89,6 +85,8 @@ void SH1106InitDriver()
     renderer->Updateframe();
     renderer->DisplayOnff(1);
 #endif
+
+    AddLog(LOG_LEVEL_INFO, PSTR("DSP: SH1106"));
   }
 }
 
@@ -117,8 +115,7 @@ void SH1106PrintLog(void)
       strlcpy(disp_screen_buffer[last_row], txt, disp_screen_buffer_cols);
       DisplayFillScreen(last_row);
 
-      snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
-      AddLog(LOG_LEVEL_DEBUG);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "[%s]"), disp_screen_buffer[last_row]);
 
       renderer->println(disp_screen_buffer[last_row]);
       renderer->Updateframe();
@@ -136,6 +133,7 @@ void SH1106Time(void)
   renderer->setCursor(0, 0);
   snprintf_P(line, sizeof(line), PSTR(" %02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);  // [ 12:34:56 ]
   renderer->println(line);
+  renderer->println();
   snprintf_P(line, sizeof(line), PSTR("%02d" D_MONTH_DAY_SEPARATOR "%02d" D_YEAR_MONTH_SEPARATOR "%04d"), RtcTime.day_of_month, RtcTime.month, RtcTime.year);   // [01-02-2018]
   renderer->println(line);
   renderer->Updateframe();
@@ -167,24 +165,24 @@ void SH1106Refresh(void)  // Every second
 
 bool Xdsp07(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_06)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if (FUNC_DISPLAY_INIT_DRIVER == function) {
-      SH1106InitDriver();
-    }
-    else if (XDSP_07 == Settings.display_model) {
+  if (FUNC_DISPLAY_INIT_DRIVER == function) {
+    SH1106InitDriver();
+  }
+  else if (XDSP_07 == Settings.display_model) {
 
-      switch (function) {
-        case FUNC_DISPLAY_MODEL:
-          result = true;
-          break;
+    switch (function) {
+      case FUNC_DISPLAY_MODEL:
+        result = true;
+        break;
 #ifdef USE_DISPLAY_MODES1TO5
-        case FUNC_DISPLAY_EVERY_SECOND:
-          SH1106Refresh();
-          break;
+      case FUNC_DISPLAY_EVERY_SECOND:
+        SH1106Refresh();
+        break;
 #endif  // USE_DISPLAY_MODES1TO5
-      }
     }
   }
   return result;

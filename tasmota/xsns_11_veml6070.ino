@@ -1,7 +1,7 @@
 /*
   xsns_11_veml6070.ino - VEML6070 ultra violet light sensor support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -95,6 +95,7 @@
 \*********************************************************************************************/
 
 #define XSNS_11                     11
+#define XI2C_12                     12              // See I2CDEVICES.md
 
 #define VEML6070_ADDR_H             0x39            // on some PCB boards the address can be changed by a solder point,
 #define VEML6070_ADDR_L             0x38            // to have no address conflicts with other I2C sensors and/or hardware
@@ -120,7 +121,6 @@ uint8_t    veml6070_addr_low  = VEML6070_ADDR_L;
 uint8_t    veml6070_addr_high = VEML6070_ADDR_H;
 uint8_t    itime              = VEML6070_INTEGRATION_TIME;
 uint8_t    veml6070_type      = 0;
-uint8_t    veml6070_valid     = 0;
 char       veml6070_name[9];
 char       str_uvrisk_text[10];
 
@@ -128,9 +128,8 @@ char       str_uvrisk_text[10];
 
 void Veml6070Detect(void)
 {
-  if (veml6070_type) {
-    return;
-  }
+  if (I2cActive(VEML6070_ADDR_L)) { return; }
+
   // init the UV sensor
   Wire.beginTransmission(VEML6070_ADDR_L);
   Wire.write((itime << 2) | 0x02);
@@ -138,9 +137,10 @@ void Veml6070Detect(void)
   // action on status
   if (!status) {
     veml6070_type      = 1;
+    Veml6070UvTableInit();    // 1[ms], initalize the UV compare table only once
     uint8_t veml_model = 0;
     GetTextIndexed(veml6070_name, sizeof(veml6070_name), veml_model, kVemlTypes);
-    AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, "VEML6070", VEML6070_ADDR_L);
+    I2cSetActiveFound(VEML6070_ADDR_L, veml6070_name);
   }
 }
 
@@ -155,11 +155,11 @@ void Veml6070UvTableInit(void)
       uv_risk_map[i] = ( (USE_VEML6070_RSET / VEML6070_TABLE_COEFFCIENT) / VEML6070_UV_MAX_DEFAULT ) * (i+1);
     } else {
       uv_risk_map[i] = ( (VEML6070_RSET_DEFAULT / VEML6070_TABLE_COEFFCIENT) / VEML6070_UV_MAX_DEFAULT ) * (i+1);
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "VEML6070 resistor error %d"), USE_VEML6070_RSET);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "VEML6070 resistor error %d"), USE_VEML6070_RSET);
     }
 #else
     uv_risk_map[i] = ( (VEML6070_RSET_DEFAULT / VEML6070_TABLE_COEFFCIENT) / VEML6070_UV_MAX_DEFAULT ) * (i+1);
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "VEML6070 resistor default used %d"), VEML6070_RSET_DEFAULT);
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "VEML6070 resistor default used %d"), VEML6070_RSET_DEFAULT);
 #endif
   }
 }
@@ -169,17 +169,11 @@ void Veml6070UvTableInit(void)
 void Veml6070EverySecond(void)
 {
   // all = 10..15[ms]
-  if (11 == (uptime %100)) {
-    Veml6070ModeCmd(1);			                  // on = 1[ms], wakeup the UV sensor
-    Veml6070Detect();                         // 1[ms], check for sensor and init with IT time
-    Veml6070ModeCmd(0);                       // off = 5[ms], suspend the UV sensor
-  } else {
-    Veml6070ModeCmd(1);			                  // 1[ms], wakeup the UV sensor
-    uvlevel = Veml6070ReadUv();               // 1..2[ms], get UV raw values
-    uvrisk  = Veml6070UvRiskLevel(uvlevel);   // 0..1[ms], get UV risk level
-    uvpower = Veml6070UvPower(uvrisk);        // 2[ms], get UV power in W/m2
-    Veml6070ModeCmd(0);                       // off = 5[ms], suspend the UV sensor
-  }
+  Veml6070ModeCmd(1);			                  // 1[ms], wakeup the UV sensor
+  uvlevel = Veml6070ReadUv();               // 1..2[ms], get UV raw values
+  uvrisk  = Veml6070UvRiskLevel(uvlevel);   // 0..1[ms], get UV risk level
+  uvpower = Veml6070UvPower(uvrisk);        // 2[ms], get UV power in W/m2
+  Veml6070ModeCmd(0);                       // off = 5[ms], suspend the UV sensor
 }
 
 /********************************************************************************************/
@@ -193,7 +187,7 @@ void Veml6070ModeCmd(bool mode_cmd)
   uint8_t status   = Wire.endTransmission();
   // action on status
   if (!status) {
-    AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, "VEML6070 mode_cmd", VEML6070_ADDR_L);
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "VEML6070 mode_cmd"));
   }
 }
 
@@ -237,7 +231,7 @@ double Veml6070UvRiskLevel(uint16_t uv_level)
     // out of range and much to high - it must be outerspace or sensor damaged
     snprintf_P(str_uvrisk_text, sizeof(str_uvrisk_text), D_UV_INDEX_7);
     return ( risk = 99 );
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "VEML6070 out of range %d"), risk);
+    AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "VEML6070 out of range %d"), risk);
   }
 }
 
@@ -267,34 +261,32 @@ double Veml6070UvPower(double uvrisk)
 
 void Veml6070Show(bool json)
 {
-  if (veml6070_type) {
-    // convert double values to string
-    char str_uvlevel[33];      // e.g. 99999 inc  = UVLevel
-    dtostrfd((double)uvlevel, 0, str_uvlevel);
-    char str_uvrisk[33];       // e.g. 25.99 text = UvIndex
-    dtostrfd(uvrisk, 2, str_uvrisk);
-    char str_uvpower[33];      // e.g. 0.399 W/m² = UvPower
-    dtostrfd(uvpower, 3, str_uvpower);
-    if (json) {
+  // convert double values to string
+  char str_uvlevel[33];      // e.g. 99999 inc  = UVLevel
+  dtostrfd((double)uvlevel, 0, str_uvlevel);
+  char str_uvrisk[33];       // e.g. 25.99 text = UvIndex
+  dtostrfd(uvrisk, 2, str_uvrisk);
+  char str_uvpower[33];      // e.g. 0.399 W/m² = UvPower
+  dtostrfd(uvpower, 3, str_uvpower);
+  if (json) {
 #ifdef USE_VEML6070_SHOW_RAW
-      ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_UV_LEVEL "\":%s,\"" D_JSON_UV_INDEX "\":%s,\"" D_JSON_UV_INDEX_TEXT "\":\"%s\",\"" D_JSON_UV_POWER "\":%s}"),
-        veml6070_name, str_uvlevel, str_uvrisk, str_uvrisk_text, str_uvpower);
+    ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_UV_LEVEL "\":%s,\"" D_JSON_UV_INDEX "\":%s,\"" D_JSON_UV_INDEX_TEXT "\":\"%s\",\"" D_JSON_UV_POWER "\":%s}"),
+      veml6070_name, str_uvlevel, str_uvrisk, str_uvrisk_text, str_uvpower);
 #else
-      ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_UV_INDEX "\":%s,\"" D_JSON_UV_INDEX_TEXT "\":\"%s\",\"" D_JSON_UV_POWER "\":%s}"),
-        veml6070_name, str_uvrisk, str_uvrisk_text, str_uvpower);
+    ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_UV_INDEX "\":%s,\"" D_JSON_UV_INDEX_TEXT "\":\"%s\",\"" D_JSON_UV_POWER "\":%s}"),
+      veml6070_name, str_uvrisk, str_uvrisk_text, str_uvpower);
 #endif  // USE_VEML6070_SHOW_RAW
 #ifdef USE_DOMOTICZ
-    if (0 == tele_period) { DomoticzSensor(DZ_ILLUMINANCE, uvlevel); }
+  if (0 == TasmotaGlobal.tele_period) { DomoticzSensor(DZ_ILLUMINANCE, uvlevel); }
 #endif  // USE_DOMOTICZ
 #ifdef USE_WEBSERVER
-    } else {
+  } else {
 #ifdef USE_VEML6070_SHOW_RAW
-      WSContentSend_PD(HTTP_SNS_UV_LEVEL, str_uvlevel);
+    WSContentSend_PD(HTTP_SNS_UV_LEVEL, str_uvlevel);
 #endif  // USE_VEML6070_SHOW_RAW
-      WSContentSend_PD(HTTP_SNS_UV_INDEX, str_uvrisk, str_uvrisk_text);
-      WSContentSend_PD(HTTP_SNS_UV_POWER, str_uvpower);
+    WSContentSend_PD(HTTP_SNS_UV_INDEX, str_uvrisk, str_uvrisk_text);
+    WSContentSend_PD(HTTP_SNS_UV_POWER, str_uvpower);
 #endif  // USE_WEBSERVER
-    }
   }
 }
 
@@ -304,14 +296,15 @@ void Veml6070Show(bool json)
 
 bool Xsns11(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_12)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg && !(pin[GPIO_ADE7953_IRQ] < 99)) {  // The ADE7953 uses I2C address 0x38 too but needs priority
+  if (FUNC_INIT == function) {
+    Veml6070Detect();
+  }
+  else if (veml6070_type) {
     switch (function) {
-      case FUNC_INIT:
-        Veml6070Detect();         // 1[ms], detect and init the sensor
-        Veml6070UvTableInit();    // 1[ms], initalize the UV compare table only once
-        break;
       case FUNC_EVERY_SECOND:
         Veml6070EverySecond();    // 10..15[ms], tested with OLED display, do all the actions needed to get all sensor values
         break;

@@ -1,7 +1,7 @@
 /*
   xlgt_03_sm16716.ino - sm16716 three channel led support for Tasmota
 
-  Copyright (C) 2019  Theo Arends
+  Copyright (C) 2021  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 #ifdef USE_SM16716
 /*********************************************************************************************\
  * SM16716 - Controlling RGB over a synchronous serial line
- * Copyright (C) 2019  Gabor Simon
+ * Copyright (C) 2021  Gabor Simon
  *
  * Source: https://community.home-assistant.io/t/cheap-uk-wifi-bulbs-with-tasmota-teardown-help-tywe3s/40508/27
 \*********************************************************************************************/
@@ -31,9 +31,9 @@
 #define D_LOG_SM16716       "SM16716: "
 
 struct SM16716 {
-  uint8_t pin_clk = 0;
-  uint8_t pin_dat = 0;
-  uint8_t pin_sel = 0;
+  int8_t pin_clk = 0;
+  int8_t pin_dat = 0;
+  int8_t pin_sel = 0;
   bool enabled = false;
 } Sm16716;
 
@@ -62,7 +62,7 @@ void SM16716_SendByte(uint8_t v)
 
 void SM16716_Update(uint8_t duty_r, uint8_t duty_g, uint8_t duty_b)
 {
-  if (Sm16716.pin_sel < 99) {
+  if (Sm16716.pin_sel >= 0) {
     bool should_enable = (duty_r | duty_g | duty_b);
     if (!Sm16716.enabled && should_enable) {
       DEBUG_DRIVER_LOG(PSTR(D_LOG_SM16716 "turning color on"));
@@ -100,11 +100,11 @@ void SM16716_Update(uint8_t duty_r, uint8_t duty_g, uint8_t duty_b)
 /*
 bool SM16716_ModuleSelected(void)
 {
-  Sm16716.pin_clk = pin[GPIO_SM16716_CLK];
-  Sm16716.pin_dat = pin[GPIO_SM16716_DAT];
-  Sm16716.pin_sel = pin[GPIO_SM16716_SEL];
+  Sm16716.pin_clk = Pin(GPIO_SM16716_CLK);
+  Sm16716.pin_dat = Pin(GPIO_SM16716_DAT);
+  Sm16716.pin_sel = Pin(GPIO_SM16716_SEL);
   DEBUG_DRIVER_LOG(PSTR(D_LOG_SM16716 "ModuleSelected; clk_pin=%d, dat_pin=%d)"), Sm16716.pin_clk, Sm16716.pin_dat);
-  return (Sm16716.pin_clk < 99) && (Sm16716.pin_dat < 99);
+  return (Sm16716.pin_clk >= 0) && (Sm16716.pin_dat >= 0);
 }
 */
 
@@ -122,9 +122,9 @@ bool Sm16716SetChannels(void)
 /*
   // handle any PWM pins, skipping the first 3 values for sm16716
   for (uint32_t i = 3; i < Light.subtype; i++) {
-    if (pin[GPIO_PWM1 +i-3] < 99) {
-      //AddLog_P2(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "Cur_Col%d 10 bits %d, Pwm%d %d"), i, cur_col[i], i+1, curcol);
-      analogWrite(pin[GPIO_PWM1 +i-3], bitRead(pwm_inverted, i-3) ? Settings.pwm_range - cur_col_10bits[i] : cur_col_10bits[i]);
+    if (PinUsed(GPIO_PWM1, i-3)) {
+      //AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_APPLICATION "Cur_Col%d 10 bits %d, Pwm%d %d"), i, cur_col[i], i+1, curcol);
+      analogWrite(Pin(GPIO_PWM1, i-3), bitRead(TasmotaGlobal.pwm_inverted, i-3) ? Settings.pwm_range - cur_col_10bits[i] : cur_col_10bits[i]);
     }
   }
 */
@@ -138,17 +138,22 @@ bool Sm16716SetChannels(void)
 
 void Sm16716ModuleSelected(void)
 {
-  if ((pin[GPIO_SM16716_CLK] < 99) && (pin[GPIO_SM16716_DAT] < 99)) {
-    Sm16716.pin_clk = pin[GPIO_SM16716_CLK];
-    Sm16716.pin_dat = pin[GPIO_SM16716_DAT];
-    Sm16716.pin_sel = pin[GPIO_SM16716_SEL];
+  if (PinUsed(GPIO_SM16716_CLK) && PinUsed(GPIO_SM16716_DAT)) {
+    Sm16716.pin_clk = Pin(GPIO_SM16716_CLK);
+    Sm16716.pin_dat = Pin(GPIO_SM16716_DAT);
+    Sm16716.pin_sel = Pin(GPIO_SM16716_SEL);
 
 /*
     // init PWM
     for (uint32_t i = 0; i < Light.subtype; i++) {
       Settings.pwm_value[i] = 0;        // Disable direct PWM control
-      if (pin[GPIO_PWM1 +i] < 99) {
-        pinMode(pin[GPIO_PWM1 +i], OUTPUT);
+      if (PinUsed(GPIO_PWM1, i)) {
+#ifdef ESP8266
+        pinMode(Pin(GPIO_PWM1, i), OUTPUT);
+#endif  // ESP8266
+#ifdef ESP32
+        analogAttach(Pin(GPIO_PWM1, i), i);
+#endif  // ESP32
       }
     }
 */
@@ -160,7 +165,7 @@ void Sm16716ModuleSelected(void)
     pinMode(Sm16716.pin_dat, OUTPUT);
     digitalWrite(Sm16716.pin_dat, LOW);
 
-    if (Sm16716.pin_sel < 99) {
+    if (Sm16716.pin_sel >= 0) {
       pinMode(Sm16716.pin_sel, OUTPUT);
       digitalWrite(Sm16716.pin_sel, LOW);
       // no need to call SM16716_Init here, it will be called after sel goes HIGH
@@ -170,9 +175,9 @@ void Sm16716ModuleSelected(void)
     }
 
     LightPwmOffset(LST_RGB);  // Handle any PWM pins, skipping the first 3 color values for sm16716
-    light_type += LST_RGB;    // Add RGB to be controlled by sm16716
-    light_flg = XLGT_03;
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("DBG: SM16716 Found"));
+    TasmotaGlobal.light_type += LST_RGB;    // Add RGB to be controlled by sm16716
+    TasmotaGlobal.light_driver = XLGT_03;
+    AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: SM16716 Found"));
   }
 }
 
