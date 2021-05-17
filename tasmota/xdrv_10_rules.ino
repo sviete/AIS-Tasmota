@@ -174,6 +174,7 @@ struct RULES {
   uint16_t last_minute = 60;
   uint16_t vars_event = 0;   // Bitmask supporting MAX_RULE_VARS bits
   uint16_t mems_event = 0;   // Bitmask supporting MAX_RULE_MEMS bits
+  bool teleperiod = false;
   bool busy = false;
   bool no_execute = false;   // Don't actually execute rule commands
 
@@ -347,7 +348,8 @@ int32_t SetRule(uint32_t idx, const char *content, bool append = false) {
   }
 
   if (!needsCompress) {                       // the rule fits uncompressed, so just copy it
-    strlcpy(Settings.rules[idx] + offset, content, sizeof(Settings.rules[idx]));
+//    strlcpy(Settings.rules[idx] + offset, content, sizeof(Settings.rules[idx]));
+    strlcpy(Settings.rules[idx] + offset, content, sizeof(Settings.rules[idx]) - offset);
     if (0 == Settings.rules[idx][0]) {
       Settings.rules[idx][1] = 0;
     }
@@ -419,7 +421,7 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule, bool stop_all
 
   // Step1: Analyse rule
   String rule_expr = rule;                             // "TELE-INA219#CURRENT>0.100"
-  if (TasmotaGlobal.rule_teleperiod) {
+  if (Rules.teleperiod) {
     int ppos = rule_expr.indexOf(F("TELE-"));          // "TELE-INA219#CURRENT>0.100" or "INA219#CURRENT>0.100"
     if (ppos == -1) { return false; }                  // No pre-amble in rule
     rule_expr = rule.substring(5);                     // "INA219#CURRENT>0.100" or "SYSTEM#BOOT"
@@ -432,7 +434,7 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule, bool stop_all
   // rule_param = "0.100" or "%VAR1%"
 
 #ifdef DEBUG_RULES
-//  AddLog_P(LOG_LEVEL_DEBUG, PSTR("RUL-RM1: expr %s, name %s, param %s"), rule_expr.c_str(), rule_name.c_str(), rule_param.c_str());
+  AddLog_P(LOG_LEVEL_DEBUG, PSTR("RUL-RM1: Teleperiod %d, Expr %s, Name %s, Param %s"), Rules.teleperiod, rule_expr.c_str(), rule_name.c_str(), rule_param.c_str());
 #endif
 
   char rule_svalue[80] = { 0 };
@@ -498,7 +500,7 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule, bool stop_all
   // Step2: Search rule_name
   int pos;
   int rule_name_idx = 0;
-  if ((pos = rule_name.indexOf(F("["))) > 0) {            // "SUBTYPE1#CURRENT[1]"
+  if ((pos = rule_name.indexOf(F("["))) > 0) {         // "SUBTYPE1#CURRENT[1]"
     rule_name_idx = rule_name.substring(pos +1).toInt();
     if ((rule_name_idx < 1) || (rule_name_idx > 6)) {  // Allow indexes 1 to 6
       rule_name_idx = 1;
@@ -506,10 +508,11 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule, bool stop_all
     rule_name = rule_name.substring(0, pos);           // "SUBTYPE1#CURRENT"
   }
 
-  String buf = event;   // copy the string into a new buffer that will be modified
+  String buf = event;                                  // Copy the string into a new buffer that will be modified
 
 //AddLog_P(LOG_LEVEL_DEBUG, PSTR("RUL-RM2: RulesRuleMatch |%s|"), buf.c_str());
 
+  buf.replace("\\"," ");                               // "Disable" any escaped control character
   JsonParser parser((char*)buf.c_str());
   JsonParserObject obj = parser.getRootObject();
   if (!obj) {
@@ -519,7 +522,7 @@ bool RulesRuleMatch(uint8_t rule_set, String &event, String &rule, bool stop_all
   }
   String subtype;
   uint32_t i = 0;
-  while ((pos = rule_name.indexOf(F("#"))) > 0) {         // "SUBTYPE1#SUBTYPE2#CURRENT"
+  while ((pos = rule_name.indexOf(F("#"))) > 0) {      // "SUBTYPE1#SUBTYPE2#CURRENT"
     subtype = rule_name.substring(0, pos);
     obj = obj[subtype.c_str()].getObject();
     if (!obj) { return false; }                        // not found
@@ -851,7 +854,7 @@ void RulesInit(void)
       bitWrite(Settings.rule_once, i, 0);
     }
   }
-  TasmotaGlobal.rule_teleperiod = false;
+  Rules.teleperiod = false;
 }
 
 void RulesEvery50ms(void)
@@ -2120,7 +2123,7 @@ void CmndRule(void)
         size_t last_index = start_index + MAX_RULE_SIZE - 3;        // set max length to what would fit uncompressed, i.e. MAX_RULE_SIZE - 3 (first NULL + length + last NULL)
         if (last_index < rule_len) {                                // if we didn't reach the end, try to shorten to last space character
           int32_t next_index = rule.lastIndexOf(" ", last_index);
-          if (next_index > 0) {                                     // if space was found and is not at the first position (i.e. we are progressing)
+          if (next_index > start_index) {                           // if space was found and is not before start_index (i.e. we are progressing)
             last_index = next_index;                                // shrink to the last space
           }                                                         // otherwise it means there are no spaces, we need to cut somewhere even if the result cannot be entered back
         } else {
@@ -2337,6 +2340,11 @@ bool Xdrv10(uint8_t function)
       break;
     case FUNC_RULES_PROCESS:
       result = RulesProcess();
+      break;
+    case FUNC_TELEPERIOD_RULES_PROCESS:
+      Rules.teleperiod = true;
+      result = RulesProcess();
+      Rules.teleperiod = false;
       break;
     case FUNC_SAVE_BEFORE_RESTART:
       RulesSaveBeforeRestart();

@@ -10,6 +10,11 @@
 
 #include <assert.h>
 
+#ifdef COMPILE_BERRY_LIB
+  #include "my_user_config.h"
+  #include "tasmota_configurations.h"
+#endif
+
 /* Macro: BE_DEBUG
  * Berry interpreter debug switch.
  * Default: 0
@@ -41,11 +46,7 @@
  * runtime. Enable this macro can greatly optimize RAM usage.
  * Default: 1
 //  **/
-// #ifdef ESP8266
-// #define BE_USE_PRECOMPILED_OBJECT       0
-// #else
-#define BE_USE_PRECOMPILED_OBJECT       1           // will enable later when stabilized
-// #endif
+#define BE_USE_PRECOMPILED_OBJECT       1
 
 /* Macro: BE_DEBUG_RUNTIME_INFO
  * Set runtime error debugging information.
@@ -157,12 +158,6 @@
 #define BE_USE_GC_MODULE                1
 #define BE_USE_SOLIDIFY_MODULE          1
 
-// #ifdef ESP32
-#define BE_USE_TASMOTA                  1
-// #else
-// #define BE_USE_TASMOTA                     0
-// #endif
-
 /* Macro: BE_EXPLICIT_XXX
  * If these macros are defined, the corresponding function will
  * use the version defined by these macros. These macro definitions
@@ -173,22 +168,25 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  extern void *berry_malloc(uint32_t size);
+  extern void *berry_malloc(size_t size);
+  extern void  berry_free(void *ptr);
   extern void *berry_realloc(void *ptr, size_t size);
 #ifdef __cplusplus
 }
 #endif
-  #define BE_EXPLICIT_MALLOC              special_malloc
-  #define BE_EXPLICIT_REALLOC             special_realloc
+  #define BE_EXPLICIT_MALLOC              berry_malloc
+  #define BE_EXPLICIT_FREE                berry_free
+  #define BE_EXPLICIT_REALLOC             berry_realloc
 #else
   #define BE_EXPLICIT_MALLOC              malloc
+  #define BE_EXPLICIT_FREE                free
   #define BE_EXPLICIT_REALLOC             realloc
 #endif // USE_BERRY_PSRAM
 
 #define BE_EXPLICIT_ABORT               abort
 #define BE_EXPLICIT_EXIT                exit
 // #define BE_EXPLICIT_MALLOC              malloc
-#define BE_EXPLICIT_FREE                free
+// #define BE_EXPLICIT_FREE                free
 // #define BE_EXPLICIT_REALLOC             realloc
 
 /* Macro: be_assert

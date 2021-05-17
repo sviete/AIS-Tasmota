@@ -200,21 +200,24 @@ void HueRespondToMSearch(void)
   if (PortUdp.beginPacket(udp_remote_ip, udp_remote_port)) {
     UnishoxStrings msg(HUE_RESP_MSG);
     char response[320];
-    snprintf_P(response, sizeof(response), msg[HUE_RESP_RESPONSE], WiFi.localIP().toString().c_str(), HueBridgeId().c_str());
+    snprintf_P(response, sizeof(response), msg[HUE_RESP_RESPONSE], NetworkAddress().toString().c_str(), HueBridgeId().c_str());
     int len = strlen(response);
     String uuid = HueUuid();
 
     snprintf_P(response + len, sizeof(response) - len, msg[HUE_RESP_ST1], uuid.c_str());
     PortUdp.write(response);
     PortUdp.endPacket();
+    // AddLog_P(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_UPNP "UDP resp=%s"), response);
 
     snprintf_P(response + len, sizeof(response) - len, msg[HUE_RESP_ST2], uuid.c_str(), uuid.c_str());
     PortUdp.write(response);
     PortUdp.endPacket();
+    // AddLog_P(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_UPNP "UDP resp=%s"), response);
 
     snprintf_P(response + len, sizeof(response) - len, msg[HUE_RESP_ST3], uuid.c_str());
     PortUdp.write(response);
     PortUdp.endPacket();
+    // AddLog_P(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_UPNP "UDP resp=%s"), response);
 
     snprintf_P(message, sizeof(message), PSTR(D_3_RESPONSE_PACKETS_SENT));
   } else {
@@ -724,7 +727,12 @@ void HueLightsCommand(uint8_t device, uint32_t device_id, String &response) {
   if (Webserver->args()) {
     response = "[";
 
+#ifdef ESP82666   // ESP8266 memory is limited, avoid copying and modify in place
     JsonParser parser((char*) Webserver->arg((Webserver->args())-1).c_str());
+#else             // does not work on ESP32, we need to get a fresh copy of the string
+    String request_arg = Webserver->arg((Webserver->args())-1);
+    JsonParser parser((char*) request_arg.c_str());
+#endif
     JsonParserObject root = parser.getRootObject();
 
     JsonParserToken hue_on = root[PSTR("on")];
@@ -992,7 +1000,7 @@ void HueLights(String *path)
     code = 406;
   }
   exit:
-  AddLog(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_HTTP D_HUE " Result (%s)"), response.c_str());
+  AddLog_P(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_HTTP D_HUE " Result (%s)"), response.c_str());
   WSSend(code, CT_APP_JSON, response);
 }
 

@@ -24,6 +24,9 @@ be_extern_native_module(solidify);
 be_extern_native_module(light);
 be_extern_native_module(gpio);
 be_extern_native_module(energy);
+#ifdef USE_LVGL
+be_extern_native_module(lvgl);
+#endif // USE_LVGL
 
 /* user-defined modules declare start */
 
@@ -60,13 +63,19 @@ BERRY_LOCAL const bntvmodule* const be_module_table[] = {
     &be_native_module(solidify),
 #endif
     /* user-defined modules register start */
-// #ifdef ESP32
-#if BE_USE_TASMOTA
+    
     &be_native_module(gpio),
+#ifdef USE_LIGHT
     &be_native_module(light),
 #endif
+
+#ifdef USE_LVGL
+    &be_native_module(lvgl),
+#endif // USE_LVGL
+#ifdef USE_ENERGY_SENSOR
     &be_native_module(energy),
-// #endif // ESP32
+#endif // USE_ENERGY_SENSOR
+
 
     /* user-defined modules register end */
     NULL /* do not remove */
@@ -76,6 +85,12 @@ BERRY_LOCAL const bntvmodule* const be_module_table[] = {
 extern void be_load_tasmota_ntvlib(bvm *vm);
 extern void be_load_wirelib(bvm *vm);
 extern void be_load_driverlib(bvm *vm);
+
+#ifdef USE_LVGL
+extern void be_load_lvgl_color_lib(bvm *vm);
+extern void be_load_lvgl_font_lib(bvm *vm);
+extern void be_load_lv_all_lib(bvm *vm);
+#endif// USE_LVGL
 
 /* this code loads the native class definitions */
 BERRY_API void be_load_custom_libs(bvm *vm)
@@ -87,7 +102,16 @@ BERRY_API void be_load_custom_libs(bvm *vm)
     /* be_load_xxxlib(vm); */
 #endif
     be_load_tasmota_ntvlib(vm);
+#ifdef USE_I2C
     be_load_wirelib(vm);
+#endif // USE_I2C
     be_load_driverlib(vm);
+#ifdef USE_LVGL
+    // LVGL
+    be_load_lvgl_color_lib(vm);
+    be_load_lvgl_font_lib(vm);
+
+    be_load_lv_all_lib(vm);
+#endif // USE_LVGL
 }
 #endif
