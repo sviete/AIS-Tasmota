@@ -32,10 +32,12 @@ const char berry_prog[] =
 
   // auto-import modules
   // // import alias
+#ifdef USE_ENERGY_SENSOR
   "import energy "
+#endif
 
   // Phase 1
-  "class Tasmota: Tasmota_ntv "
+  // "class Tasmota: Tasmota_ntv "
     // for now the variables are built, need to find a way to push in Flash
     // "def init() "
     // "end "
@@ -350,7 +352,7 @@ const char berry_prog[] =
     //   "end "
     // "end "
 
-  "end "
+  // "end "
 
   // // Monkey patch `Driver` class - To be continued
   // "class Driver2 : Driver "
@@ -365,6 +367,27 @@ const char berry_prog[] =
   "tasmota = Tasmota() "
   "def log(m,l) tasmota.log(m,l) end "
   "def load(f) tasmota.load(f) end "
+
+#ifdef USE_LVGL
+  // instanciate singleton
+  // "class lvgl : lvgl_ntv "
+  // "end "
+  // "lv = lvgl() "
+  "import lvgl as lv "
+  "_lvgl_cb = [ {}, {}, {}, {}, {}, {} ] "
+  "_lvgl_cb_obj = [ {}, {}, {}, {}, {}, {} ] "
+  "def _lvgl_cb_dispatch(idx, obj, v1, v2, v3, v4) "
+    // "import string print(string.format('>>> idx=%i obj=0x%08X v1=%i', idx, obj, v1)) "
+    "var func = _lvgl_cb[idx].find(obj) "
+    "var inst = _lvgl_cb_obj[idx].find(obj) "
+    "if func != nil "
+      "return func(inst, v1, v2, v3, v4) "
+    "end "
+    "return nil "
+  "end "
+  // array of 6 callback types, each with key (lv_obj pointer converted to int, closure)
+
+#endif // USE_LVGL
 
   // Wire class
   // "class Wire : Wire_ntv "
@@ -406,10 +429,15 @@ const char berry_prog[] =
 
 const char berry_autoexec[] =
   // load "autoexec.be" using import, which loads either .be or .bec file
+  "import string "
   "try "
     "load('autoexec.be') "
   "except .. as e,m "
-    "log(\"BRY: exception in autoexec '\",e,\"':\",m) "
+    "if e=='io_error' && string.find(m, \"autoexec.be\")>0 "
+      "log(\"BRY: no autoexec.be\") "
+    "else "
+      "log(\"BRY: exception in autoexec.be: \"+e+\": \"+m) "
+    "end "
   "end "
   ;
 #endif  // USE_BERRY

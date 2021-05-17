@@ -5,7 +5,7 @@
  * 
  * read power values
  *******************************************************************/
-#include "be_object.h"
+#include "be_constobj.h"
 
 // Tasmota specific
 
@@ -17,7 +17,6 @@ extern int gp_pin_used(bvm *vm);
 extern int gp_pin(bvm *vm);
 
 #if !BE_USE_PRECOMPILED_OBJECT
-// #if 1           // TODO we will do pre-compiled later
 be_native_module_attr_table(gpio) {
     // HIGH/LOW
     be_native_module_int("LOW", 0),
@@ -274,7 +273,9 @@ be_native_module_attr_table(gpio) {
     be_native_module_int("TFMINIPLUS_RX", 235),
     be_native_module_int("ZEROCROSS", 236),
     be_native_module_int("HALLEFFECT", 237),
-    be_native_module_int("SENSOR_END", 238),
+    be_native_module_int("EPD_DATA", 238),
+    be_native_module_int("INPUT", 239),
+    be_native_module_int("SENSOR_END", 240),
 
     be_native_module_function("pin_mode", gp_pin_mode),
     be_native_module_function("digital_write", gp_digital_write),
@@ -288,7 +289,7 @@ be_native_module_attr_table(gpio) {
 be_define_native_module(gpio, NULL);
 #else
 /* @const_object_info_begin
-module gpio (scope: global, depend: BE_USE_TASMOTA) {
+module gpio (scope: global) {
     LOW, int(0)
     HIGH, int(1)
     
@@ -543,7 +544,9 @@ module gpio (scope: global, depend: BE_USE_TASMOTA) {
     TFMINIPLUS_RX, int(235)
     ZEROCROSS, int(236)
     HALLEFFECT, int(237)
-    SENSOR_END, int(238)
+    EPD_DATA, int(238)
+    INPUT, int(239)
+    SENSOR_END, int(240)
 
     pin_mode, func(gp_pin_mode)
     digital_write, func(gp_digital_write)

@@ -193,6 +193,8 @@ void ILI9341_2::init(uint16_t width, uint16_t height) {
     if (_hwspi > 2) {
       spi2->begin(_sclk, _miso, _mosi, -1);
     }
+#else
+    SPI.begin();
 #endif // ESP32
   } else {
 #ifdef ESP32
@@ -528,7 +530,10 @@ void ili9342_bpwr(uint8_t on);
 void ILI9341_2::DisplayOnff(int8_t on) {
 
   if ((_hwspi >= 2) && (_bp < 0)) {
-    ili9342_bpwr(on);
+    //ili9342_bpwr(on);
+    if (pwr_cbp) {
+      pwr_cbp(on);
+    }
   }
 
   if (on) {
@@ -602,7 +607,10 @@ void ILI9341_2::dim(uint8_t dim) {
     ledcWrite(ESP32_PWM_CHANNEL,dimmer);
   } else {
     if (_hwspi>=2) {
-      ili9342_dimm(dim);
+      //ili9342_dimm(dim);
+      if (dim_cbp) {
+        dim_cbp(dim);
+      }
     }
   }
 #endif

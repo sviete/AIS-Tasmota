@@ -599,7 +599,9 @@ void ExecuteCommandPower(uint32_t device, uint32_t state, uint32_t source)
   }
   TasmotaGlobal.active_device = device;
 
-  SetPulseTimer((device -1) % MAX_PULSETIMERS, 0);
+  if (state != POWER_SHOW_STATE) {
+    SetPulseTimer((device -1) % MAX_PULSETIMERS, 0);
+  }
 
   static bool interlock_mutex = false;    // Interlock power command pending
   power_t mask = 1 << (device -1);        // Device to control
@@ -927,7 +929,7 @@ void PerformEverySecond(void)
 
   ResetGlobalValues();
 
-  if (Settings.tele_period) {
+  if (Settings.tele_period || (3601 == TasmotaGlobal.tele_period)) {
     if (TasmotaGlobal.tele_period >= 9999) {
       if (!TasmotaGlobal.global_state.network_down) {
         TasmotaGlobal.tele_period = 0;  // Allow teleperiod once wifi is connected
@@ -1147,7 +1149,7 @@ void Every250mSeconds(void)
           }
 #endif  // FIRMWARE_MINIMAL
           if (ota_retry_counter < OTA_ATTEMPTS / 2) {
-            if (strstr_P(TasmotaGlobal.mqtt_data, PSTR(".gz"))) {      // Might be made case insensitive...
+            if (StrCaseStr_P(TasmotaGlobal.mqtt_data, PSTR(".gz"))) {
               ota_retry_counter = 1;
             } else {
               strcat_P(TasmotaGlobal.mqtt_data, PSTR(".gz"));
@@ -1177,7 +1179,6 @@ void Every250mSeconds(void)
         TasmotaGlobal.ota_state_flag = 0;
         Response_P(PSTR("{\"" D_CMND_UPGRADE "\":\""));
         if (ota_result) {
-//          SetFlashModeDout();                             // Force DOUT for both ESP8266 and ESP8285
           ResponseAppend_P(PSTR(D_JSON_SUCCESSFUL ". " D_JSON_RESTARTING));
           TasmotaGlobal.restart_flag = 2;
         } else {
@@ -1196,6 +1197,7 @@ void Every250mSeconds(void)
     if (MidnightNow()) {
       XsnsCall(FUNC_SAVE_AT_MIDNIGHT);
     }
+
     if (TasmotaGlobal.save_data_counter && CommandsReady()) {
       TasmotaGlobal.save_data_counter--;
       if (TasmotaGlobal.save_data_counter <= 0) {
@@ -1216,8 +1218,11 @@ void Every250mSeconds(void)
         TasmotaGlobal.save_data_counter = Settings.save_data;
       }
     }
+
     if (TasmotaGlobal.restart_flag && CommandsReady()) {
-      if ((214 == TasmotaGlobal.restart_flag) || (215 == TasmotaGlobal.restart_flag) || (216 == TasmotaGlobal.restart_flag)) {
+      if ((214 == TasmotaGlobal.restart_flag) ||          // Reset 4
+          (215 == TasmotaGlobal.restart_flag) ||          // Reset 5
+          (216 == TasmotaGlobal.restart_flag)) {          // Reset 6
         // Backup current SSIDs and Passwords
         char storage_ssid1[strlen(SettingsText(SET_STASSID1)) +1];
         strncpy(storage_ssid1, SettingsText(SET_STASSID1), sizeof(storage_ssid1));
@@ -1241,7 +1246,8 @@ void Every250mSeconds(void)
 //        if (216 == TasmotaGlobal.restart_flag) {
           // Backup mqtt host, port, client, username and password
 //        }
-        if ((215 == TasmotaGlobal.restart_flag) || (216 == TasmotaGlobal.restart_flag)) {
+        if ((215 == TasmotaGlobal.restart_flag) ||        // Reset 5
+            (216 == TasmotaGlobal.restart_flag)) {        // Reset 6
           SettingsErase(2);  // Erase all flash from program end to end of physical excluding optional filesystem
         }
         SettingsDefault();
@@ -1250,7 +1256,7 @@ void Every250mSeconds(void)
         SettingsUpdateText(SET_STASSID2, storage_ssid2);
         SettingsUpdateText(SET_STAPWD1, storage_pass1);
         SettingsUpdateText(SET_STAPWD2, storage_pass2);
-        if (216 == TasmotaGlobal.restart_flag) {
+        if (216 == TasmotaGlobal.restart_flag) {          // Reset 6
           // Restore the mqtt host, port, client, username and password
           SettingsUpdateText(SET_MQTT_HOST, storage_mqtthost);
           SettingsUpdateText(SET_MQTT_USER, storage_mqttuser);
@@ -1258,23 +1264,26 @@ void Every250mSeconds(void)
           SettingsUpdateText(SET_MQTT_TOPIC, storage_mqtttopic);
           Settings.mqtt_port = mqtt_port;
         }
-        TasmotaGlobal.restart_flag = 2;
+        TasmotaGlobal.restart_flag = 3;                   // Finish backlog then Restart 1
       }
-      else if (213 == TasmotaGlobal.restart_flag) {
+      else if (213 == TasmotaGlobal.restart_flag) {       // Reset 3
         SettingsSdkErase();  // Erase flash SDK parameters
-        TasmotaGlobal.restart_flag = 2;
+        TasmotaGlobal.restart_flag = 2;                   // Restart 1
       }
-      else if (212 == TasmotaGlobal.restart_flag) {
+      else if (212 == TasmotaGlobal.restart_flag) {       // Reset 2
         SettingsErase(0);    // Erase all flash from program end to end of physical flash
-        TasmotaGlobal.restart_flag = 211;
+        TasmotaGlobal.restart_flag = 211;                 // Reset 1
       }
-      if (211 == TasmotaGlobal.restart_flag) {
+
+      if (211 == TasmotaGlobal.restart_flag) {            // Reset 1
         SettingsDefault();
-        TasmotaGlobal.restart_flag = 2;
+        TasmotaGlobal.restart_flag = 3;                   // Finish backlog then Restart 1
       }
-      if (2 == TasmotaGlobal.restart_flag) {
+
+      if (2 == TasmotaGlobal.restart_flag) {              // Restart 1
         SettingsSaveAll();
       }
+
       TasmotaGlobal.restart_flag--;
       if (TasmotaGlobal.restart_flag <= 0) {
         AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_APPLICATION "%s"), (TasmotaGlobal.restart_halt) ? PSTR("Halted") : PSTR(D_RESTARTING));
@@ -1286,6 +1295,8 @@ void Every250mSeconds(void)
     if (Settings.flag4.network_wifi) {
       WifiCheck(TasmotaGlobal.wifi_state_flag);
       TasmotaGlobal.wifi_state_flag = WIFI_RESTART;
+    } else {
+      WifiDisable();
     }
     break;
   case 3:                                                 // Every x.75 second
@@ -1324,7 +1335,7 @@ void Every250mSeconds(void)
         StopWebserver();
       }
 #ifdef USE_EMULATION
-    if (Settings.flag2.emulation) { UdpConnect(); }
+      if (Settings.flag2.emulation) { UdpConnect(); }
 #endif  // USE_EMULATION
 #endif  // USE_WEBSERVER
 
@@ -1678,6 +1689,19 @@ void GpioInit(void)
         mpin -= (AGPIO(GPIO_KEY1_INV_NP) - AGPIO(GPIO_KEY1));
       }
 #ifdef ESP32
+      else if ((mpin >= AGPIO(GPIO_SWT1_PD)) && (mpin < (AGPIO(GPIO_SWT1_PD) + MAX_SWITCHES))) {
+        SwitchPulldownFlag(mpin - AGPIO(GPIO_SWT1_PD));
+        mpin -= (AGPIO(GPIO_SWT1_PD) - AGPIO(GPIO_SWT1));
+      }
+      else if ((mpin >= AGPIO(GPIO_KEY1_PD)) && (mpin < (AGPIO(GPIO_KEY1_PD) + MAX_KEYS))) {
+        ButtonPulldownFlag(mpin - AGPIO(GPIO_KEY1_PD));    //  0 .. 3
+        mpin -= (AGPIO(GPIO_KEY1_PD) - AGPIO(GPIO_KEY1));
+      }
+      else if ((mpin >= AGPIO(GPIO_KEY1_INV_PD)) && (mpin < (AGPIO(GPIO_KEY1_INV_PD) + MAX_KEYS))) {
+        ButtonPulldownFlag(mpin - AGPIO(GPIO_KEY1_INV_PD));  //  0 .. 3
+        ButtonInvertFlag(mpin - AGPIO(GPIO_KEY1_INV_PD));    //  0 .. 3
+        mpin -= (AGPIO(GPIO_KEY1_INV_PD) - AGPIO(GPIO_KEY1));
+      }
       else if ((mpin >= AGPIO(GPIO_KEY1_TC)) && (mpin < (AGPIO(GPIO_KEY1_TC) + MAX_KEYS))) {
         ButtonTouchFlag(mpin - AGPIO(GPIO_KEY1_TC));  //  0 .. 3
         mpin -= (AGPIO(GPIO_KEY1_TC) - AGPIO(GPIO_KEY1));
@@ -1793,6 +1817,13 @@ void GpioInit(void)
       if (!((1 == i) || (3 == i))) {             // Skip serial
         pinMode(i, INPUT);
       }
+    }
+  }
+
+  // Digital input
+  for (uint32_t i = 0; i < MAX_SWITCHES; i++) {
+    if (PinUsed(GPIO_INPUT, i)) {
+      pinMode(Pin(GPIO_INPUT, i), INPUT);
     }
   }
 

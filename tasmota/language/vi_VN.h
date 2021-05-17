@@ -554,8 +554,8 @@
 #define D_GZ_AXIS "Gyro Z-Axis"
 
 // xsns_34_hx711.ino
-#define D_HX_CAL_REMOVE "Remove weigth"
-#define D_HX_CAL_REFERENCE "Load reference weigth"
+#define D_HX_CAL_REMOVE "Remove weight"
+#define D_HX_CAL_REFERENCE "Load reference weight"
 #define D_HX_CAL_DONE "Đã hiệu chỉnh"
 #define D_HX_CAL_FAIL "Hiệu chỉnh thất bại"
 #define D_RESET_HX711 "Xóa thang chia"
@@ -620,6 +620,7 @@
 #define D_SENSOR_LED_LINK      "LedLink"    // Suffix "i"
 #define D_SENSOR_PWM           "PWM"        // Suffix "1"
 #define D_SENSOR_COUNTER       "Counter"    // Suffix "1"
+#define D_SENSOR_INPUT         "Input"
 #define D_SENSOR_IRRECV        "IRrecv"
 #define D_SENSOR_MHZ_RX        "MHZ Rx"
 #define D_SENSOR_MHZ_TX        "MHZ Tx"
