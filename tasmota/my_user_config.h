@@ -56,9 +56,9 @@
 //#define USER_TEMPLATE "{\"NAME\":\"Generic\",\"GPIO\":[255,255,255,255,255,255,255,255,255,255,255,255,255],\"FLAG\":15,\"BASE\":18}"  // [Template] Set JSON template
 #endif  // ESP8266
 #ifdef ESP32
-#define MODULE                 WEMOS              // [Module] Select default module from tasmota_template.h
-#define FALLBACK_MODULE        WEMOS             // [Module2] Select default module on fast reboot where USER_MODULE is user template
-//#define USER_TEMPLATE "{\"NAME\":\"ESP32-DevKit\",\"GPIO\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1,1,1,0,0,0,0,1,1,1,1,1,0,0,1],\"FLAG\":0,\"BASE\":1}"  // [Template] Set JSON template
+#define MODULE                 template              // [Module] Select default module from tasmota_template.h
+#define FALLBACK_MODULE        WT32_ETH01             // [Module2] Select default module on fast reboot where USER_MODULE is user template
+#define USER_TEMPLATE "{\"NAME\":\"AIS-BEZ\",\"GPIO\":[0,0,0,0,0,0,0,0,5472,0,5504,0,3840,576,5600,0,0,0,0,5568,0,0,0,0,0,0,0,0,0,0,0,0,7584,0,0,7585],\"FLAG\":0,\"BASE\":5}"  // [Template] Set JSON template
 #endif  // ESP32
 
 #define SAVE_DATA              1                 // [SaveData] Save changed parameters to Flash (0 = disable, 1 - 3600 seconds)
@@ -73,8 +73,8 @@
 
 #define STA_SSID1              ""                // [Ssid1] Wifi SSID
 #define STA_PASS1              ""                // [Password1] Wifi password
-#define STA_SSID2              "8DB0839D"                // [Ssid2] Optional alternate AP Wifi SSID
-#define STA_PASS2              "094FAFE8"                // [Password2] Optional alternate AP Wifi password
+#define STA_SSID2              ""                // [Ssid2] Optional alternate AP Wifi SSID
+#define STA_PASS2              ""                // [Password2] Optional alternate AP Wifi password
 #define WIFI_AP_PASSPHRASE     ""                // AccessPoint passphrase. For WPA2 min 8 char, for open use "" (max 63 char).
 #define WIFI_CONFIG_TOOL       WIFI_RETRY        // [WifiConfig] Default tool if wifi fails to connect (default option: 4 - WIFI_RETRY)
                                                  // (WIFI_RESTART, WIFI_MANAGER, WIFI_RETRY, WIFI_WAIT, WIFI_SERIAL, WIFI_MANAGER_RESET_ONLY)
@@ -169,7 +169,13 @@
 // -- HTTP ----------------------------------------
 #define WEB_SERVER             2                 // [WebServer] Web server (0 = Off, 1 = Start as User, 2 = Start as Admin)
 #define WEB_PASSWORD           ""                // [WebPassword] Web server Admin mode Password for WEB_USERNAME (empty string = Disable)
+#ifdef ESP8266
 #define FRIENDLY_NAME          "Nowe urządzenie"          // [FriendlyName] Friendlyname up to 32 characters used by webpages and Alexa
+#endif  // ESP8266
+#ifdef ESP32
+#define FRIENDLY_NAME          "AIS Ble Zigbee Eth Gate"          // [FriendlyName] Friendlyname up to 32 characters used by webpages and Alexa
+#endif  // ESP32
+
 #define EMULATION              EMUL_NONE         // [Emulation] Select Belkin WeMo (single relay/light) or Hue Bridge emulation (multi relay/light) (EMUL_NONE, EMUL_WEMO or EMUL_HUE)
 #define EMULATION_HUE_1ST_GEN  false             // [Emulation] Force SetOption109 1 - if you only have Echo Dot 2nd gen devices
 #define CORS_DOMAIN            ""                // [Cors] CORS Domain for preflight requests
@@ -471,7 +477,7 @@
 #define USE_RULES                                // Add support for rules (+8k code)
 //  #define USE_EXPRESSION                         // Add support for expression evaluation in rules (+3k2 code, +64 bytes mem)
 //    #define SUPPORT_IF_STATEMENT                 // Add support for IF statement in rules (+4k2 code, -332 bytes mem)
-//  #define USER_RULE1 "<Any rule1 data>"          // Add rule1 data saved at initial firmware load or when command reset is executed
+ #define USER_RULE1 "ON System#Boot do TCPStart 8888 endon"          // Add rule1 data saved at initial firmware load or when command reset is executed
 //  #define USER_RULE2 "<Any rule2 data>"          // Add rule2 data saved at initial firmware load or when command reset is executed
 //  #define USER_RULE3 "<Any rule3 data>"          // Add rule3 data saved at initial firmware load or when command reset is executed
 
