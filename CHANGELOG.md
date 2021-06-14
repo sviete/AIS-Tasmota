@@ -6,9 +6,28 @@ All notable changes to this project will be documented in this file.
 ## [9.3.1] 20210223
 - Release Kenneth
 
+## [9.4.0.5]
+### Added
+- Preliminary support for Esp32C3 - RiscV based
+
+### Changed
+- NeoPixelBus library from v2.6.1.4 to v2.6.3 stage
+- Allow longer MQTT response messages by removing fixed memory buffer with size 1040 to heap allocated buffer
+- Command ``Timers`` layout of JSON message changed to single line
+- Command ``Gpio`` layout of JSON message changed to single line
+- Command ``Modules`` layout of JSON message changed to single line
+- I2C extended MPU6886 to also support MPU9250 (found in Legacy M5Stack Fire)
+- ESP32 increase log buffer from 4k to 6k to support longer messages
+- Move Settings from DRAM to heap
+
 ## [9.4.0.4]
 ### Added
 - Version bump to signal new features to Hass
+- Support for BM8563 RTC chip (I2C) found in M5Stack Core2 and M5StickC
+- Command ``Status0`` providing all status information on a single line
+
+### Changed
+- IRremoteESP8266 library from v2.7.16 to v2.7.18
 
 ## [9.4.0.3] 20210515
 ### Added

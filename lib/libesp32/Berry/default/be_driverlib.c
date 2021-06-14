@@ -86,12 +86,14 @@ void be_load_driverlib(bvm *vm) {
     static const bnfuncinfo members[] = {
         { "every_second", NULL },
         { "every_100ms", NULL },
+        { "web_add_handler", NULL },
         { "web_add_button", NULL },
         { "web_add_main_button", NULL },
         { "save_before_restart", NULL },
         { "web_sensor", NULL },
         { "json_append", NULL },
         { "button_pressed", NULL },
+        { "display", NULL },
 
         { "get_tasmota", d_getTasmotaGlob },
 
@@ -112,12 +114,14 @@ void be_load_driverlib(bvm *vm) {
 class be_class_tasmota_driver (scope: global, name: Driver) {
     every_second, var
     every_100ms, var
+    web_add_handler, var
     web_add_button, var
     web_add_main_button, var
     save_before_restart, var
     web_sensor, var
     json_append, var
     button_pressed, var
+    display, var
 
     get_tasmota, func(d_getTasmotaGlob)
 

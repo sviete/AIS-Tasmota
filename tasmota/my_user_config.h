@@ -520,6 +520,7 @@
 //  #define SHELLY_VOLTAGE_MON                     // Add support for reading voltage and current measurment (-0k0 code)
 
 // -- Optional light modules ----------------------
+#define USE_LIGHT                                // Add support for light control
 #define USE_WS2812                               // WS2812 Led string using library NeoPixelBus (+5k code, +1k mem, 232 iram) - Disable by //
 //  #define USE_WS2812_DMA                         // ESP8266 only, DMA supports only GPIO03 (= Serial RXD) (+1k mem). When USE_WS2812_DMA is enabled expect Exceptions on Pow
   #define USE_WS2812_RMT  0                      // ESP32 only, hardware RMT support (default). Specify the RMT channel 0..7. This should be preferred to software bit bang.
@@ -635,7 +636,8 @@
 //  #define USE_EZORGB                             // [I2cDriver55] Enable support for EZO's RGB sensor (+0k5 code) - Shared EZO code required for any EZO device (+1k2 code)
 //  #define USE_EZOPMP                             // [I2cDriver55] Enable support for EZO's PMP sensor (+0k3 code) - Shared EZO code required for any EZO device (+1k2 code)
 //  #define USE_SEESAW_SOIL                        // [I2cDriver56] Enable Capacitice Soil Moisture & Temperature Sensor (I2C addresses 0x36 - 0x39) (+1k3 code)
-//  #define USE_MPU6886                            // [I2cDriver58] Enable MPU6886 - found in M5Stack - support 2 I2C buses on ESP32 (I2C address 0x68) (+2k code)
+//  #define USE_MPU_ACCEL                          // [I2cDriver58] Enable MPU6886/MPU9250 - found in M5Stack - support both I2C buses on ESP32 (I2C address 0x68) (+2k code)
+//  #define USE_BM8563                             // [I2cDriver59] Enable BM8563 RTC - found in M5Stack - support both I2C buses on ESP32 (I2C address 0x51) (+2.5k code)
 
 //  #define USE_DISPLAY                            // Add I2C Display Support (+2k code)
     #define USE_DISPLAY_MODES1TO5                // Enable display mode 1 to 5 in addition to mode 0
@@ -662,6 +664,11 @@
     // #define SEVENSEG_ADDRESS1     0x70      // No longer used.  Use MTX_ADDRESS1 - MTX_ADDRESS8 instead to specify I2C address of sevenseg displays
 //    #define USE_DISPLAY_SH1106                   // [DisplayModel 7] [I2cDriver6] Enable SH1106 Oled 128x64 display (I2C addresses 0x3C and 0x3D)
 #endif  // USE_I2C
+
+
+// -- Universal Display Driver ---------------------------------
+// #define USE_UNIVERSAL_DISPLAY                   // New universal display driver for both I2C and SPI
+    #define MAX_TOUCH_BUTTONS 16                  // Virtual touch buttons
 
 // -- SPI sensors ---------------------------------
 //#define USE_SPI                                  // Hardware SPI using GPIO12(MISO), GPIO13(MOSI) and GPIO14(CLK) in addition to two user selectable GPIOs(CS and DC)
@@ -728,9 +735,12 @@
 //#define USE_TFMINIPLUS                           // Add support for TFmini Plus (TFmini, TFmini-S) LiDAR modules via UART interface (+0k8)
 
 // -- Power monitoring sensors --------------------
-// #define USE_ENERGY_MARGIN_DETECTION              // Add support for Energy Margin detection (+1k6 code)
+#define USE_ENERGY_SENSOR                        // Add support for Energy Monitors (+14k code)
+#define USE_ENERGY_MARGIN_DETECTION              // Add support for Energy Margin detection (+1k6 code)
   #define USE_ENERGY_POWER_LIMIT                 // Add additional support for Energy Power Limit detection (+1k2 code)
 #define USE_ENERGY_DUMMY                         // Add support for dummy Energy monitor allowing user values (+0k7 code)
+#define USE_HLW8012                              // Add support for HLW8012, BL0937 or HJL-01 Energy Monitor for Sonoff Pow and WolfBlitz
+#define USE_CSE7766                              // Add support for CSE7766 Energy Monitor for Sonoff S31 and Pow R2
 #define USE_PZEM004T                             // Add support for PZEM004T Energy monitor (+2k code)
 #define USE_PZEM_AC                              // Add support for PZEM014,016 Energy monitor (+1k1 code)
 #define USE_PZEM_DC                              // Add support for PZEM003,017 Energy monitor (+1k1 code)
@@ -813,6 +823,10 @@
   #define USE_ZIGBEE_MANUFACTURER "Tasmota"      // reported "Manufacturer" (cluster 0000 / attribute 0004)
   #define USE_ZBBRIDGE_TLS                       // TLS support for zbbridge
   #define USE_ZIGBEE_ZBBRIDGE_EEPROM 0x50        // I2C id for the ZBBridge EEPROM
+  // #define USE_ZIGBEE_FORCE_NO_CHILDREN           // This feature forces `CONFIG_MAX_END_DEVICE_CHILDREN` to zero which means that the coordinator does not accept any direct child. End-devices must pair through a router.
+                                                 // This may mitigate some battery drain issues with IKEA devices.
+                                                 // **DO NOT USE UNLESS YOU KNOW EXACTLY WHAT YOU'RE DOING** See #10413
+
 
   // Auto-binding constants, see `Z_autoAttributeReporting`
   // Below are the threshold for attribute reporting
@@ -935,17 +949,52 @@
 #define USE_CSE7761                              // Add support for CSE7761 Energy monitor as used in Sonoff Dual R3
 
 // -- LVGL Graphics Library ---------------------------------
-//#define USE_LVGL                                 // LVGL Engine, requires Berry, takes 440k of Flash
+//#define USE_LVGL                                 // LVGL Engine, requires Berry (+382KB)
   #define USE_LVGL_PSRAM                         // Allocate LVGL memory in PSRAM if PSRAM is connected - this might be slightly slower but leaves main memory intact
   #define USE_LVGL_MAX_SLEEP  10                 // max sleep in ms when LVGL is enabled, more than 10ms will make display less responsive
-  //#define USE_LVGL_FREETYPE                      // Use the FreeType renderer to display fonts using native TTF files in file system (+75k flash)
-                                                 // WARNING this feature needs to increase the stack size to 32KB, for which there is no easy way right now
+  #define USE_LVGL_PNG_DECODER                   // include a PNG image decoder from file system (+16KB)
+  //#define USE_LVGL_FREETYPE                      // Use the FreeType renderer to display fonts using native TTF files in file system (+77KB flash)
     #define LV_USE_FT_CACHE_MANAGER 1            // define whether glyphs are cached by FreeType library
     #define USE_LVGL_FREETYPE_MAX_FACES 64       // max number of FreeType faces in cache
     #define USE_LVGL_FREETYPE_MAX_SIZES 4        // max number of sizes in cache
     #define USE_LVGL_FREETYPE_MAX_BYTES 16*1024  // max bytes in cache
+    #define USE_LVGL_FREETYPE_MAX_BYTES_PSRAM 64*1024  // max bytes in cache when using PSRAM
   #define USE_LVGL_BG_DEFAULT 0x000000           // Default color for the uninitialized background screen (black)
-
+  // Disabling select widgets that will be rarely used in Tasmota (-13KB)
+    #define BE_LV_WIDGET_ARC 1
+    #define BE_LV_WIDGET_BAR 1
+    #define BE_LV_WIDGET_BTN 1
+    #define BE_LV_WIDGET_BTNMATRIX 1
+    #define BE_LV_WIDGET_CALENDAR 0
+    #define BE_LV_WIDGET_CANVAS 1
+    #define BE_LV_WIDGET_CHART 1
+    #define BE_LV_WIDGET_CHECKBOX 1
+    #define BE_LV_WIDGET_CONT 1
+    #define BE_LV_WIDGET_CPICKER 1
+    #define BE_LV_WIDGET_DROPDOWN 1
+    #define BE_LV_WIDGET_GAUGE 1
+    #define BE_LV_WIDGET_IMG 1
+    #define BE_LV_WIDGET_IMGBTN 1
+    #define BE_LV_WIDGET_KEYBOARD 0
+    #define BE_LV_WIDGET_LABEL 1
+    #define BE_LV_WIDGET_LED 1
+    #define BE_LV_WIDGET_LINE 1
+    #define BE_LV_WIDGET_LINEMETER 1
+    #define BE_LV_WIDGET_LIST 1
+    #define BE_LV_WIDGET_MSGBOX 1
+    #define BE_LV_WIDGET_OBJMASK 1
+    #define BE_LV_WIDGET_TEMPL 1
+    #define BE_LV_WIDGET_PAGE 1
+    #define BE_LV_WIDGET_ROLLER 1
+    #define BE_LV_WIDGET_SLIDER 1
+    #define BE_LV_WIDGET_SPINBOX 1
+    #define BE_LV_WIDGET_SPINNER 1
+    #define BE_LV_WIDGET_SWITCH 1
+    #define BE_LV_WIDGET_TABLE 1
+    #define BE_LV_WIDGET_TABVIEW 1
+    #define BE_LV_WIDGET_TEXTAREA 1
+    #define BE_LV_WIDGET_TILEVIEW 1
+    #define BE_LV_WIDGET_WIN 0
 
 #endif  // ESP32
 

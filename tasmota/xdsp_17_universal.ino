@@ -59,33 +59,7 @@ void Core2DisplayDim(uint8_t dim);
 
 /*********************************************************************************************/
 #ifdef DSP_ROM_DESC
-/* sample descriptor */
-const char DSP_SAMPLE_DESC[] PROGMEM =
-":H,SH1106,128,64,1,I2C,3c,*,*,*\n"
-":S,0,1,1,0,40,20\n"
-":I\n"
-"AE\n"
-"D5,80\n"
-"A8,3f\n"
-"D3,00\n"
-"40\n"
-"8D,14\n"
-"20,00\n"
-"A1\n"
-"C8\n"
-"DA,12\n"
-"81,CF\n"
-"D9F1\n"
-"DB,40\n"
-"A4\n"
-"A6\n"
-"AF\n"
-":o,AE\n"
-":O,AF\n"
-":A,00,10,40,00,02\n"
-":i,A6,A7\n"
-"#\n";
-
+const char DSP_SAMPLE_DESC[] PROGMEM = DSP_ROM_DESC
 #endif // DSP_ROM_DESC
 /*********************************************************************************************/
 Renderer *Init_uDisplay(const char *desc, int8_t cs) {
@@ -95,7 +69,7 @@ uDisplay *udisp;
 
   if (TasmotaGlobal.gpio_optiona.udisplay_driver || desc) {
 
-    Settings.display_model = XDSP_17;
+    Settings->display_model = XDSP_17;
 
 
     fbuff = (char*)calloc(DISPDESC_SIZE, 1);
@@ -124,7 +98,7 @@ uDisplay *udisp;
 
 
 #ifdef USE_SCRIPT
-    if (bitRead(Settings.rule_enabled, 0) && !ddesc) {
+    if (bitRead(Settings->rule_enabled, 0) && !ddesc) {
       uint8_t dfound = Run_Scripter(">d",-2,0);
       if (dfound == 99) {
         char *lp = glob_script_mem.section_ptr + 2;
@@ -137,9 +111,9 @@ uDisplay *udisp;
 #endif // USE_SCRIPT
 
 #ifdef USE_RULES
-    if (!bitRead(Settings.rule_enabled, 2) && !ddesc) {
+    if (!bitRead(Settings->rule_enabled, 2) && !ddesc) {
       // only if rule3 is not enabled for rules
-      char *cp = Settings.rules[2];
+      char *cp = Settings->rules[2];
       while (*cp == ' ') cp++;
       memcpy(fbuff, cp, DISPDESC_SIZE - 1);
       if (fbuff[0] == ':' && fbuff[1] == 'H') {
@@ -326,8 +300,8 @@ uDisplay *udisp;
     renderer = udisp->Init();
     if (!renderer) return 0;
 
-    Settings.display_width = renderer->width();
-    Settings.display_height = renderer->height();
+    Settings->display_width = renderer->width();
+    Settings->display_height = renderer->height();
     fg_color = renderer->fgcol();
     bg_color = renderer->bgcol();
     color_type = renderer->color_type();
@@ -337,8 +311,8 @@ uDisplay *udisp;
     renderer->SetDimCB(Core2DisplayDim);
 #endif
 
-    renderer->DisplayInit(DISPLAY_INIT_MODE, Settings.display_size, Settings.display_rotate, Settings.display_font);
-    renderer->dim(Settings.display_dimmer);
+    renderer->DisplayInit(DISPLAY_INIT_MODE, Settings->display_size, Settings->display_rotate, Settings->display_font);
+    renderer->dim(Settings->display_dimmer);
 
 #ifdef SHOW_SPLASH
     renderer->Splash();
@@ -380,15 +354,15 @@ void UDISP_PrintLog(void)
 {
   disp_refresh--;
   if (!disp_refresh) {
-    disp_refresh = Settings.display_refresh;
+    disp_refresh = Settings->display_refresh;
     if (!disp_screen_buffer_cols) { DisplayAllocScreenBuffer(); }
 
     char* txt = DisplayLogBuffer('\370');
     if (txt != NULL) {
-      uint8_t last_row = Settings.display_rows -1;
+      uint8_t last_row = Settings->display_rows -1;
 
       renderer->clearDisplay();
-      renderer->setTextSize(Settings.display_size);
+      renderer->setTextSize(Settings->display_size);
       renderer->setCursor(0,0);
       for (byte i = 0; i < last_row; i++) {
         strlcpy(disp_screen_buffer[i], disp_screen_buffer[i +1], disp_screen_buffer_cols);
@@ -410,8 +384,8 @@ void UDISP_Time(void)
   char line[12];
 
   renderer->clearDisplay();
-  renderer->setTextSize(Settings.display_size);
-  renderer->setTextFont(Settings.display_font);
+  renderer->setTextSize(Settings->display_size);
+  renderer->setTextFont(Settings->display_font);
   renderer->setCursor(0, 0);
   snprintf_P(line, sizeof(line), PSTR(" %02d" D_HOUR_MINUTE_SEPARATOR "%02d" D_MINUTE_SECOND_SEPARATOR "%02d"), RtcTime.hour, RtcTime.minute, RtcTime.second);  // [ 12:34:56 ]
   renderer->println(line);
@@ -424,8 +398,8 @@ void UDISP_Time(void)
 void UDISP_Refresh(void)  // Every second
 {
   if (!renderer) return;
-  if (Settings.display_mode) {  // Mode 0 is User text
-    switch (Settings.display_mode) {
+  if (Settings->display_mode) {  // Mode 0 is User text
+    switch (Settings->display_mode) {
       case 1:  // Time
         UDISP_Time();
         break;
@@ -451,7 +425,7 @@ bool Xdsp17(uint8_t function) {
   if (FUNC_DISPLAY_INIT_DRIVER == function) {
     Init_uDisplay(0, -1);
   }
-  else if (udisp_init_done && (XDSP_17 == Settings.display_model)) {
+  else if (udisp_init_done && (XDSP_17 == Settings->display_model)) {
     switch (function) {
       case FUNC_DISPLAY_MODEL:
         result = true;
