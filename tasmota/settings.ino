@@ -1358,11 +1358,11 @@ void SettingsDelta(void) {
     }
 
     // AIS dom - safeguard to prevent soft bricking during the migration path violation
-    if (Settings.version < 0x08040003) {
+    if (Settings->version < 0x08040003) {
       SettingsDefault();
     }
 
-    Settings.version = VERSION;
+    Settings->version = VERSION;
     SettingsSave(1);
   }
 

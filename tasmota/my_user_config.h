@@ -58,7 +58,7 @@
 #ifdef ESP32
 #define MODULE                 template              // [Module] Select default module from tasmota_template.h
 #define FALLBACK_MODULE        WT32_ETH01             // [Module2] Select default module on fast reboot where USER_MODULE is user template
-#define USER_TEMPLATE "{\"NAME\":\"AIS-BEZ\",\"GPIO\":[0,0,0,0,0,0,0,0,5472,0,5504,0,3840,576,5600,0,0,0,0,5568,0,0,0,0,0,0,0,0,0,0,0,0,7584,0,0,7585],\"FLAG\":0,\"BASE\":5}"  // [Template] Set JSON template
+#define USER_TEMPLATE "{\"NAME\":\"AIS-BEZ\",\"GPIO\":[1,1,1,1,1,1,0,0,1,0,1,1,3840,576,5600,0,0,0,0,5568,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,1],\"FLAG\":0,\"BASE\":1}"  // [Template] Set JSON template
 #endif  // ESP32
 
 #define SAVE_DATA              1                 // [SaveData] Save changed parameters to Flash (0 = disable, 1 - 3600 seconds)
