@@ -131,6 +131,8 @@ String EthernetMacAddress(void);
 #endif  // ARDUINO_ESP32_RELEASE
 
 #define USE_UFILESYS
+#define GUI_TRASH_FILE
+#define GUI_EDIT_FILE
 
 #undef FIRMWARE_MINIMAL                            // Minimal is not supported as not needed
 
@@ -272,6 +274,9 @@ String EthernetMacAddress(void);
 #endif
 #ifndef MQTT_SOCKET_TIMEOUT
 #define MQTT_SOCKET_TIMEOUT         4          // Seconds
+#endif
+#ifndef MQTT_WIFI_CLIENT_TIMEOUT
+#define MQTT_WIFI_CLIENT_TIMEOUT    200        // Wifi TCP connection timeout (default is 5000 mSec)
 #endif
 #ifndef MQTT_CLEAN_SESSION
 #define MQTT_CLEAN_SESSION          1          // 0 = No clean session, 1 = Clean session (default)
