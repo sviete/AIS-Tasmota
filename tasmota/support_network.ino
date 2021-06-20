@@ -28,7 +28,7 @@ struct {
 /*********************************************************************************************/
 void MqttDiscoverServer(void) {
   AddLog_P(LOG_LEVEL_INFO, "AIS EASY: Wykrywam MQTT Host dla bramki: %s", TasmotaGlobal.mqtt_client);
-  
+
   HTTPClient http;
   http.begin(AIS_WS_URL);
   http.setAuthorization(AIS_WS_USER, AIS_WS_PASS);
@@ -75,15 +75,15 @@ void MqttDiscoverServer(void) {
 
 #ifdef USE_DISCOVERY
 void StartMdns(void) {
-//  static uint8_t mdns_delayed_start = Settings.param[P_MDNS_DELAYED_START];
+//  static uint8_t mdns_delayed_start = Settings->param[P_MDNS_DELAYED_START];
 
-  if (Settings.flag3.mdns_enabled) {  // SetOption55 - Control mDNS service
+  if (Settings->flag3.mdns_enabled) {  // SetOption55 - Control mDNS service
     if (!Mdns.begun) {
 //      if (mdns_delayed_start) {
 //        AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS D_ATTEMPTING_CONNECTION));
 //        mdns_delayed_start--;
 //      } else {
-//        mdns_delayed_start = Settings.param[P_MDNS_DELAYED_START];
+//        mdns_delayed_start = Settings->param[P_MDNS_DELAYED_START];
         MDNS.end(); // close existing or MDNS.begin will fail
         Mdns.begun = (uint8_t)MDNS.begin(TasmotaGlobal.hostname);
         AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS "%s"), (Mdns.begun) ? PSTR(D_INITIALIZED) : PSTR(D_FAILED));
