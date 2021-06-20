@@ -27,7 +27,7 @@ struct {
 
 /*********************************************************************************************/
 void MqttDiscoverServer(void) {
-  AddLog_P(LOG_LEVEL_INFO, "AIS EASY: Wykrywam MQTT Host dla bramki: %s", TasmotaGlobal.mqtt_client);
+  AddLog(LOG_LEVEL_INFO, "AIS EASY: Wykrywam MQTT Host dla bramki: %s", TasmotaGlobal.mqtt_client);
 
   HTTPClient http;
   http.begin(AIS_WS_URL);
@@ -54,9 +54,9 @@ void MqttDiscoverServer(void) {
             if (token != ""){
               SettingsUpdateText(SET_MQTT_PWD, token.c_str());
             }
-            AddLog_P(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki wykryty");
+            AddLog(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki wykryty");
           } else {
-            AddLog_P(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki %s NIE wykryty.", SettingsText(SET_MQTT_USER));
+            AddLog(LOG_LEVEL_INFO, "AIS EASY: MQTT Host dla bramki %s NIE wykryty.", SettingsText(SET_MQTT_USER));
           }
         } else {
           AddLog(LOG_LEVEL_DEBUG,  line.c_str());

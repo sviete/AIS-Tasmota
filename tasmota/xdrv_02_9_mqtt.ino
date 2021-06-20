@@ -941,7 +941,7 @@ void MqttReconnect(void) {
         Mqtt.ais_retry_counter = 180;
         MqttDiscoverServer();
       } else {
-        AddLog_P(LOG_LEVEL_DEBUG_MORE, PSTR("AIS: Ask AI-Speaker about IP in %d second"), Mqtt.ais_retry_counter);
+        AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("AIS: Ask AI-Speaker about IP in %d second"), Mqtt.ais_retry_counter);
       }
    }
     if (!strlen(SettingsText(SET_MQTT_HOST)) || !Settings->mqtt_port) {
